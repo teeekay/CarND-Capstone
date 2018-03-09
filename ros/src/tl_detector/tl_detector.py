@@ -48,6 +48,13 @@ class TLDetector(object):
         self.last_state = TrafficLight.UNKNOWN
         self.last_wp = -1
         self.state_count = 0
+        
+        # Use Ground truth to stop the car till traffic light classifier is implemented
+        self.use_ground_truth = rospy.get_param("~use_tl_ground_truth",True)
+        # to stop using gt, do this -> rospy.set_param('~use_tl_ground_truth', False)
+
+
+
 
         rospy.spin()
 
@@ -90,37 +97,129 @@ class TLDetector(object):
             self.upcoming_red_light_pub.publish(Int32(self.last_wp))
         self.state_count += 1
 
-    def get_closest_waypoint(self, pose):
+    def get_closest_waypoint(self, pose, waypoints):
         """Identifies the closest path waypoint to the given position
             https://en.wikipedia.org/wiki/Closest_pair_of_points_problem
         Args:
             pose (Pose): position to match a waypoint to
+            waypoints : set of points to look for 
 
         Returns:
-            int: index of the closest waypoint in self.waypoints
+            int: index of the closest waypoint in waypoints array
 
         """
-        #TODO implement
-        return 0
+        min_dist = float("inf")
+        closest_wp_idx = -1
 
-    def get_light_state(self, light):
+        for idx, wp in enumerate(waypoints):
+            dist = self.find_dist(pose, wp.pose.pose)
+            if(dist < min_dist):
+                min_dist = dist
+                closest_wp_idx = idx
+
+        return closest_wp_idx       
+        
+        
+        
+
+    def get_light_state_ground_truth(self):
         """Determines the current color of the traffic light
 
         Args:
-            light (TrafficLight): light to classify
+            self
 
         Returns:
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
+            int: Waypoint idex of closest traffic light 
+ 
+        """
+        state = TrafficLight.UNKNOWN
+        light_wp = -1
+           
+        # Get Car position
+        car_position_id = self.get_closest_waypoint(self.pose.pose, self.waypoints)
+
+        # Get the closest Traffic Light Signal from the Car Laocation
+        closest_tl_id = self.get_closest_waypoint(self.pose.pose, self.lights)
+
+        # Check if Traffic light is ahead of the car
+        if(car_position_id<closest_tl_id):
+
+            # Get corresponding Traffic light
+            closest_tl = self.lights[closest_tl_id]
+
+            # Get the corresponding Stop line position from stop_line_positions
+            closest_stop_line = self.config['stop_line_positions'][closest_tl_id]
+
+            # Convert stop_line to pose object
+            closest_stop_line_pose = Pose()
+            closest_stop_line_pose.position.x = closest_stop_line[0]
+            closest_stop_line_pose.position.y = closest_stop_line[1]
+
+            # Get the waypoint id corresponding to the stop line
+            light_wp = self.get_closest_waypoint(closest_stop_line_pose, self.waypoints)
+
+            # get the state of the Closest Traffic light
+            state = closest_tl.state
+
+
+        return light_wp, state
+
+
+
+
+
+
+
+    def get_light_state(self):
+        """Determines the current color of the traffic light
+
+        Args:
+            self
+
+        Returns:
+            int: ID of traffic light color (specified in styx_msgs/TrafficLight)
+            int: Waypoint idex of closest traffic light 
 
         """
+        state = TrafficLight.UNKNOWN
+        light_wp = -1
+        
         if(not self.has_image):
             self.prev_light_loc = None
             return False
 
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
 
-        #Get classification
-        return self.light_classifier.get_classification(cv_image)
+        #Get classification #TODO
+        state = self.light_classifier.get_classification(cv_image)
+        
+        # Get Car position
+        car_position_id = self.get_closest_waypoint(self.pose.pose, self.waypoints)
+
+        # Get the closest Traffic Light Signal from the Car Laocation
+        closest_tl_id = self.get_closest_waypoint(self.pose.pose, self.lights)
+
+        # Check if Traffic light is ahead of the car
+        if(car_position_id<closest_tl_id):
+
+            # Get corresponding Traffic light
+            closest_tl = self.lights[closest_tl_id]
+
+            # Get the corresponding Stop line position from stop_line_positions
+            closest_stop_line = self.config['stop_line_positions'][closest_tl_id]
+
+            # Convert stop_line to pose object
+            closest_stop_line_pose = Pose()
+            closest_stop_line_pose.position.x = closest_stop_line[0]
+            closest_stop_line_pose.position.y = closest_stop_line[1]
+
+            # Get the waypoint id corresponding to the stop line
+            light_wp = self.get_closest_waypoint(closest_stop_line_pose, self.waypoints
+
+        
+        return light_wp, state
+                                                 
 
     def process_traffic_lights(self):
         """Finds closest visible traffic light, if one exists, and determines its
@@ -131,20 +230,19 @@ class TLDetector(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-        light = None
-
-        # List of positions that correspond to the line to stop in front of for a given intersection
-        stop_line_positions = self.config['stop_line_positions']
+        state = TrafficLight.UNKNOWN
+        light_wp = -1
+                                         
         if(self.pose):
-            car_position = self.get_closest_waypoint(self.pose.pose)
+                                                 
+            if self.use_tl_ground_truth:
+                light_wp, state = self.get_light_state_ground_truth()
+            else:
+                light_wp, state = self.get_light_state()
 
-        #TODO find the closest visible traffic light (if one exists)
+        return light_wp, state
 
-        if light:
-            state = self.get_light_state(light)
-            return light_wp, state
-        self.waypoints = None
-        return -1, TrafficLight.UNKNOWN
+        
 
 if __name__ == '__main__':
     try:
