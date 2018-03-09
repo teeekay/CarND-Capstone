@@ -215,7 +215,7 @@ class TLDetector(object):
             closest_stop_line_pose.position.y = closest_stop_line[1]
 
             # Get the waypoint id corresponding to the stop line
-            light_wp = self.get_closest_waypoint(closest_stop_line_pose, self.waypoints
+            light_wp = self.get_closest_waypoint(closest_stop_line_pose, self.waypoints)
 
         
         return light_wp, state
