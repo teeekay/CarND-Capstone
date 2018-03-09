@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# File renamed to waypnt_updater.py because original name
+# waypoint_updater.py which matches directory and package name
+# prevented loading from waypoint_updater.cfg
 
 import rospy
 import math
@@ -34,10 +37,9 @@ class WaypointUpdater(object):
         self.velocity = None
         self.final_waypoints = []
         self.next_traffic_light_wp = None
-        if not self.dyn_vals_received:
-            self.update_rate = 3
-            self.default_velocity = 0.0
-            self.lookahead_wps = 50
+        self.update_rate = 3
+        self.default_velocity = 4.0
+        self.lookahead_wps = 50
         self.subs = {}
         self.pubs = {}
 
@@ -60,7 +62,6 @@ class WaypointUpdater(object):
         self.pubs['/final_waypoints'] = rospy.Publisher('/final_waypoints',
                                                         Lane, queue_size=1)
 
-        # TODO: Add other member variables you need below
         self.dyn_reconf_srv = Server(DynReconfConfig, self.dyn_vars_cb)
 
         self.loop()
@@ -81,15 +82,11 @@ class WaypointUpdater(object):
 
     # adjust dynamic variables
     def dyn_vars_cb(self, config, level):
+        self.dyn_vals_received = True
         if self.update_rate:
             old_update_rate = self.update_rate
             old_default_velocity = self.default_velocity
             old_lookahead_wps = self.lookahead_wps
-        else:
-            self.dyn_vals_received = True
-            old_update_rate = 1
-            old_default_velocity = 0.0
-            old_lookahead_wps = 50
 
         rospy.loginfo("Received dynamic parameters {} with level: {}"
                       .format(config, level))
@@ -115,7 +112,7 @@ class WaypointUpdater(object):
                           .format(old_lookahead_wps,
                                   config['dyn_lookahead_wps']))
             self.lookahead_wps = config['dyn_lookahead_wps']
-
+        # we can also send adjusted values back
         return config
 
     def velocity_cb(self, twist_msg):
@@ -124,7 +121,6 @@ class WaypointUpdater(object):
     def pose_cb(self, pose_msg):
         self.pose = pose_msg.pose
         rospy.loginfo("waypoint_updater:pose_cb pose set to  %s", self.pose)
-        #  self.send_waypoints()
 
     def waypoints_cb(self, lane_msg):
         rospy.loginfo("waypoint_updater:waypoints_cb loading waypoints")
@@ -190,6 +186,8 @@ class WaypointUpdater(object):
         waypointlist[waypoint].twist.twist.linear.x = velocity
 
     def closest_waypoint(self):
+        # TODO - use local search first of final_waypoints sent out last
+        # iteration
         dist = 1000000  # maybe should use max
         closest = 0
 
@@ -204,8 +202,8 @@ class WaypointUpdater(object):
             # end of if
         # end of for
         return closest
-        # TODO - implement next_waypoint to make sure we start list at a point
-        # in front of the car
+        # Note: the first waypoint is closest to the car, not necessarily in
+        # front of it.  Waypoint follower is responsible for finding this
 
     def distance(self, wp1, wp2):
         dist = 0

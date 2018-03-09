@@ -18,7 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 ## System dependencies are found with CMake's conventions
-#find_package(Boost REQUIRED COMPONENTS system thread)
+#find_package(Boost REQUIRED COMPONENTS system)
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -109,7 +109,7 @@ generate_dynamic_reconfigure_options(
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES waypoint_updater
-#  CATKIN_DEPENDS geometry_msgs roscpp rospy sensor_msgs std_msgs styx_msgs styx_utils dynamic_reconfigure
+#  CATKIN_DEPENDS geometry_msgs roscpp rospy sensor_msgs std_msgs styx_msgs styx_utils
 #  DEPENDS system_lib
 )
 
@@ -152,7 +152,7 @@ include_directories(
 
 ## Specify libraries to link a library or executable target against
 #target_link_libraries(${PROJECT_NAME}
-#  pthread dynamic_reconfigure_config_init_mutex ${catkin_LIBRARIES}
+#  ${catkin_LIBRARIES}
 #)
 
 #############
@@ -164,12 +164,10 @@ include_directories(
 
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
-#catkin_install_python(PROGRAMS nodes/updater.py
-#  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
-#install(PROGRAMS
-#  scripts/waypoint_updater.py
+# install(PROGRAMS
+#  scripts/my_python_script
 #  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-#)
+# )
 
 ## Mark executables and/or libraries for installation
 # install(TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_node
