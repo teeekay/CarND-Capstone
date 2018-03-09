@@ -36,10 +36,13 @@ class WaypointUpdater(object):
         self.pose = None
         self.velocity = None
         self.final_waypoints = []
+        self.final_waypoints_start_ptr = 0
+        self.last_search_distance = None
+        self.last_search_time = None
         self.next_traffic_light_wp = None
-        self.update_rate = 3
-        self.default_velocity = 4.0
-        self.lookahead_wps = 50
+        self.update_rate = 10
+        self.default_velocity = 5.0
+        self.lookahead_wps = 200
         self.subs = {}
         self.pubs = {}
 
@@ -56,7 +59,7 @@ class WaypointUpdater(object):
                              self.velocity_cb)
 
         # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint
-        #  self.subs['/traffic_waypoint'] = \
+        # self.subs['/traffic_waypoint'] = \
         #      rospy.Subscriber('/traffic_waypoint', String, self.traffic_cb)
 
         self.pubs['/final_waypoints'] = rospy.Publisher('/final_waypoints',
@@ -178,6 +181,8 @@ class WaypointUpdater(object):
         lane.header.frame_id = '/world'
         lane.header.stamp = rospy.Time()
         self.pubs['/final_waypoints'].publish(lane)
+        self.final_waypoints = list(new_wps_list)
+        self.final_waypoints_start_ptr = start_wps_ptr
 
     def get_waypoint_velocity(self, waypoint):
         return waypoint.twist.twist.linear.x
@@ -188,12 +193,32 @@ class WaypointUpdater(object):
     def closest_waypoint(self):
         # TODO - use local search first of final_waypoints sent out last
         # iteration
-        dist = 1000000  # maybe should use max
-        closest = 0
-
         def distance_lambda(a, b): return math.sqrt(
             (a.x-b.x)**2 + (a.y-b.y)**2)
-        for i in range(len(self.waypoints)):
+        if self.final_waypoints:
+            dist = distance_lambda(self.final_waypoints[0].pose.pose.position,
+                                   self.pose.position)
+            for i in range(1, len(self.final_waypoints)):
+                tmpdist = distance_lambda(self.final_waypoints[i].pose.pose.position,
+                                          self.pose.position)
+                if tmpdist < dist:
+                    dist = tmpdist
+                else: 
+                    # distance is starting to get larger so look at 
+                    # last position
+                    if abs(dist-self.last_search_distance) < 5.0:
+                        self.last_search_distance = dist
+                        return self.final_waypoints_start_ptr + i - 1
+                    # end if
+                # end if else
+            # end for - fall out no closest match that looks acceptable
+            rospy.logwarn("waypoint_updater:closest_waypoint local search not"
+                          "satisfied - run full search")
+        # end if
+
+        dist = 1000000  # maybe should use max
+        closest = 0      
+        for i in range(len(self.waypoints))
             tmpdist = distance_lambda(self.waypoints[i].pose.pose.position,
                                       self.pose.position)
             if tmpdist < dist:
@@ -201,6 +226,7 @@ class WaypointUpdater(object):
                 dist = tmpdist
             # end of if
         # end of for
+        self.last_search_distance = dist
         return closest
         # Note: the first waypoint is closest to the car, not necessarily in
         # front of it.  Waypoint follower is responsible for finding this
