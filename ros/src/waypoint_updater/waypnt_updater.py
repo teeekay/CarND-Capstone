@@ -37,6 +37,7 @@ class WaypointUpdater(object):
         self.velocity = None
         self.final_waypoints = []
         self.final_waypoints_start_ptr = 0
+        self.back_search = False
         self.last_search_distance = None
         self.last_search_time = None
         self.next_traffic_light_wp = None
@@ -199,16 +200,39 @@ class WaypointUpdater(object):
             dist = distance_lambda(self.final_waypoints[0].pose.pose.position,
                                    self.pose.position)
             for i in range(1, len(self.final_waypoints)):
-                tmpdist = distance_lambda(self.final_waypoints[i].pose.pose.position,
-                                          self.pose.position)
+                tmpdist = distance_lambda(self.final_waypoints[i].pose.pose.
+                                          position, self.pose.position)
                 if tmpdist < dist:
                     dist = tmpdist
-                else: 
-                    # distance is starting to get larger so look at 
+                else:
+                    # distance is starting to get larger so look at
                     # last position
+                    if (i == 1):
+                        # we're closest to original waypoint, but what if
+                        # we're going backwards - loop backwards to make sure
+                        # a point further back  isn't closest
+                        for j in range(self.final_waypoints_start_ptr-1,
+                                       self.final_waypoints_start_ptr -
+                                       len(self.final_waypoints),
+                                       -1):
+                            tmpdist = distance_lambda(
+                                self.waypoints[j % len(self.waypoints)].
+                                pose.pose.position,
+                                self.pose.position)
+                            if tmpdist < dist:
+                                dist = tmpdist
+                                self.back_search = True
+                            else:
+                                self.last_search_distance = dist
+                                return ((j+1) % len(self.waypoints))
+                            # end if else
+                        # end for
+                    # end if
+
                     if abs(dist-self.last_search_distance) < 5.0:
                         self.last_search_distance = dist
-                        return self.final_waypoints_start_ptr + i - 1
+                        return ((self.final_waypoints_start_ptr + i - 1) %
+                                len(self.waypoints))
                     # end if
                 # end if else
             # end for - fall out no closest match that looks acceptable
@@ -217,8 +241,8 @@ class WaypointUpdater(object):
         # end if
 
         dist = 1000000  # maybe should use max
-        closest = 0      
-        for i in range(len(self.waypoints))
+        closest = 0
+        for i in range(len(self.waypoints)):
             tmpdist = distance_lambda(self.waypoints[i].pose.pose.position,
                                       self.pose.position)
             if tmpdist < dist:
