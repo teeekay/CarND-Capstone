@@ -173,10 +173,12 @@ class VisNode(object):
                 final_wp_line.color.r = 0.0
                 final_wp_line.color.g = 1.0
                 final_wp_line.color.b = 0.0
-                for wp_idx in range(len(self.final_waypoints)):
+                # Make local copy for looping to prevent interrupt by callback
+                final_waypoints = deepcopy(self.final_waypoints)
+                for wp_idx in range(len(final_waypoints)):
                     if wp_idx % 10 == 0:  # thin out points
                         final_wp_line.points.append(
-                            self.final_waypoints[wp_idx].pose.pose.position)
+                                    final_waypoints[wp_idx].pose.pose.position)
                 marker_array.markers.append(final_wp_line)
 
                 # Traffic Waypoint Spheres
@@ -189,11 +191,13 @@ class VisNode(object):
                 tl_marker.scale.x = 30.0
                 tl_marker.scale.y = 30.0
                 tl_marker.scale.z = 30.0
-                for tl_idx in range(len(self.traffic_lights)):
+                # Make local copy for looping to prevent interrupt by callback
+                traffic_lights = deepcopy(self.traffic_lights)
+                for tl_idx in range(len(traffic_lights)):
                     tl_marker.points.append(
-                                self.traffic_lights[tl_idx].pose.pose.position)
+                                traffic_lights[tl_idx].pose.pose.position)
                     tl_color = self.set_traffic_light_color(
-                                        self.traffic_lights[tl_idx].state, 0.6)
+                                        traffic_lights[tl_idx].state, 0.6)
                     tl_marker.colors.append(tl_color)
                 marker_array.markers.append(tl_marker)
 
@@ -215,6 +219,7 @@ class VisNode(object):
                     det_tl_marker.color.g = 0.0
                     det_tl_marker.color.b = 0.0
                     tl_idx = self.traffic_waypoint
+                    # Make local copy to modify z position
                     tl_pose = deepcopy(self.base_waypoints[tl_idx].pose.pose)
                     tl_pose.position.z += 50  # offset the marker above waypnts
                     det_tl_marker.pose = tl_pose
