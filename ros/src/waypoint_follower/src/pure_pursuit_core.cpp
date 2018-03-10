@@ -292,24 +292,35 @@ geometry_msgs::Twist PurePursuit::calcTwist(double curvature, double cmd_velocit
 // Search for closest waypt from current pose
 void PurePursuit::getClosestWaypoint() {
   int path_size = static_cast<int>(current_waypoints_.getSize());
-  double min_dist = std::numeric_limits<double>::max();
+  int closest_wp = path_size - 1;
 
-  // if waypoints are not given, do nothing.
+  // If waypoints are not given, do nothing
   if (path_size == 0) {
     closest_waypoint_idx_ = -1;
     return;
   }
 
-  // look for the closest waypoint.
-  for (int i = 0; i < path_size; i++) {
+  // Initialize distance to first waypoint
+  double dist = getPlaneDistance(current_waypoints_.getWaypointPosition(0),
+                                 current_pose_.pose.position);
+
+  // Search for a closer waypoint
+  for (int i = 1; i < path_size; i++) {
     double t_dist = getPlaneDistance(current_waypoints_.getWaypointPosition(i),
                                      current_pose_.pose.position);
-    if (t_dist < min_dist) {
-      closest_waypoint_idx_ = i;
-      min_dist = t_dist;
+    if (t_dist < dist) {
+      // Found a closer waypoint, store dist and keep searching
+      dist = t_dist;
+    } else {
+      // Distance is not decreasing, prev waypt was closest so stop searching
+      closest_wp = i - 1;
+      break;
     }
   }
-  //ROS_ERROR_STREAM("wp = " << closest_waypoint_idx_ << " dist = " << min_dist);
+
+  // Store closest waypoint as output
+  closest_waypoint_idx_ = closest_wp;
+  //ROS_ERROR_STREAM("wp = " << closest_waypoint_idx_ << " dist = " << dist);
   return;
 }
 // edufford end
