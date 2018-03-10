@@ -70,6 +70,9 @@ private:
   bool pose_set_;
   bool velocity_set_;
   int num_of_next_waypoint_;
+  // edufford start
+  int closest_waypoint_idx_; // index of closest waypoint to current pose
+  // edufford end
   geometry_msgs::Point position_of_next_target_;
   double lookahead_distance_;
 
@@ -84,6 +87,9 @@ private:
   bool interpolateNextTarget(int next_waypoint, geometry_msgs::Point *next_target) const;
   bool verifyFollowing() const;
   geometry_msgs::Twist calcTwist(double curvature, double cmd_velocity) const;
+  // edufford start
+  void getClosestWaypoint(); // find closest waypoint to current pose
+  // edufford end
   void getNextWaypoint();
   geometry_msgs::TwistStamped outputZero() const;
   geometry_msgs::TwistStamped outputTwist(geometry_msgs::Twist t) const;

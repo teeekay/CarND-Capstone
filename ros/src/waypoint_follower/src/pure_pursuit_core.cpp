@@ -234,9 +234,26 @@ bool PurePursuit::verifyFollowing() const
   double a = 0;
   double b = 0;
   double c = 0;
-  getLinearEquation(current_waypoints_.getWaypointPosition(1), current_waypoints_.getWaypointPosition(2), &a, &b, &c);
+  // edufford start
+  //getLinearEquation(current_waypoints_.getWaypointPosition(1), current_waypoints_.getWaypointPosition(2), &a, &b, &c);
+
+  // Use next 2 waypts from current pose to make a line seg to check
+  int next_wp = closest_waypoint_idx_ + 1;
+  int next_next_wp = closest_waypoint_idx_ + 2;
+  getLinearEquation(current_waypoints_.getWaypointPosition(next_wp),
+                    current_waypoints_.getWaypointPosition(next_next_wp),
+                    &a, &b, &c);
+  // edufford end
+
   double displacement = getDistanceBetweenLineAndPoint(current_pose_.pose.position, a, b, c);
-  double relative_angle = getRelativeAngle(current_waypoints_.getWaypointPose(1), current_pose_.pose);
+  // edufford start
+  //double relative_angle = getRelativeAngle(current_waypoints_.getWaypointPose(1), current_pose_.pose);
+
+  // Use angle from current pose to next waypoint to check
+  double relative_angle = getRelativeAngle(current_waypoints_.getWaypointPose(next_wp),
+                                           current_pose_.pose);
+  // edufford end
+
   //ROS_ERROR("side diff : %lf , angle diff : %lf",displacement,relative_angle);
   if (displacement < displacement_threshold_ && relative_angle < relative_angle_threshold_)
   {
@@ -270,6 +287,32 @@ geometry_msgs::Twist PurePursuit::calcTwist(double curvature, double cmd_velocit
   prev_angular_velocity = twist.angular.z;
   return twist;
 }
+
+// edufford start
+// Search for closest waypt from current pose
+void PurePursuit::getClosestWaypoint() {
+  int path_size = static_cast<int>(current_waypoints_.getSize());
+  double min_dist = std::numeric_limits<double>::max();
+
+  // if waypoints are not given, do nothing.
+  if (path_size == 0) {
+    closest_waypoint_idx_ = -1;
+    return;
+  }
+
+  // look for the closest waypoint.
+  for (int i = 0; i < path_size; i++) {
+    double t_dist = getPlaneDistance(current_waypoints_.getWaypointPosition(i),
+                                     current_pose_.pose.position);
+    if (t_dist < min_dist) {
+      closest_waypoint_idx_ = i;
+      min_dist = t_dist;
+    }
+  }
+  //ROS_ERROR_STREAM("wp = " << closest_waypoint_idx_ << " dist = " << min_dist);
+  return;
+}
+// edufford end
 
 void PurePursuit::getNextWaypoint()
 {
@@ -363,6 +406,12 @@ geometry_msgs::TwistStamped PurePursuit::go()
   bool interpolate_flag = false;
 
   calcLookaheadDistance(1);
+
+  // edufford start
+  // Search for closest waypoint to current pose
+  getClosestWaypoint();
+  // edufford end
+
   // search next waypoint
   getNextWaypoint();
   if (num_of_next_waypoint_ == -1)
@@ -377,7 +426,12 @@ geometry_msgs::TwistStamped PurePursuit::go()
       num_of_next_waypoint_ == (static_cast<int>(current_waypoints_.getSize() - 1)))
   {
     position_of_next_target_ = current_waypoints_.getWaypointPosition(num_of_next_waypoint_);
-    return outputTwist(calcTwist(calcCurvature(position_of_next_target_), getCmdVelocity(0)));
+
+    // edufford start
+    //return outputTwist(calcTwist(calcCurvature(position_of_next_target_), getCmdVelocity(0)));
+    return outputTwist(calcTwist(calcCurvature(position_of_next_target_),
+                                 getCmdVelocity(closest_waypoint_idx_)));
+    // edufford end
   }
 
   // linear interpolation and calculate angular velocity
@@ -391,7 +445,11 @@ geometry_msgs::TwistStamped PurePursuit::go()
 
   // ROS_INFO("next_target : ( %lf , %lf , %lf)", next_target.x, next_target.y,next_target.z);
 
-  return outputTwist(calcTwist(calcCurvature(position_of_next_target_), getCmdVelocity(0)));
+  // edufford start
+  //return outputTwist(calcTwist(calcCurvature(position_of_next_target_), getCmdVelocity(0)));
+  return outputTwist(calcTwist(calcCurvature(position_of_next_target_),
+                               getCmdVelocity(closest_waypoint_idx_)));
+  // edufford end
 
 // ROS_INFO("linear : %lf, angular : %lf",twist.twist.linear.x,twist.twist.angular.z);
 
