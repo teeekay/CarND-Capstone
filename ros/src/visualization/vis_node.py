@@ -98,8 +98,7 @@ class VisNode(object):
             self.vis_rate = config['dyn_vis_rate']  # store new rate
             self.rate = rospy.Rate(self.vis_rate)  # apply new rate
 
-        if self.vis_enabled != config['dyn_vis_enabled']:
-            self.vis_enabled = config['dyn_vis_enabled']  # store new flag
+        self.vis_enabled = config['dyn_vis_enabled']  # store new flag
 
         return config
 
