@@ -10,7 +10,7 @@ from sensor_msgs.msg import PointCloud2
 from sensor_msgs.msg import Image
 import sensor_msgs.point_cloud2 as pcl2
 from std_msgs.msg import Header
-from cv_bridge import CvBridge  # , CvBridgeError
+from cv_bridge import CvBridge
 
 from styx_msgs.msg import TrafficLight, TrafficLightArray, Lane
 import numpy as np
@@ -220,4 +220,5 @@ class Bridge(object):
             y_values.append(y)
             z_values.append(z)
 
-        self.server('drawline', data={'next_x': x_values, 'next_y': y_values, 'next_z': z_values})
+        self.server('drawline', data={'next_x': x_values, 'next_y': y_values,
+                                      'next_z': z_values})
