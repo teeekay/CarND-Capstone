@@ -7,7 +7,7 @@ from dbw_mkz_msgs.msg import SteeringReport, ThrottleCmd, BrakeCmd, SteeringCmd
 from std_msgs.msg import Float32 as Float
 from std_msgs.msg import Bool
 from sensor_msgs.msg import PointCloud2
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CompressedImage
 import sensor_msgs.point_cloud2 as pcl2
 from std_msgs.msg import Header
 from cv_bridge import CvBridge
@@ -19,6 +19,12 @@ from io import BytesIO
 import base64
 
 import math
+import cv2
+
+'''
+Compressed image publishing example from:
+http://wiki.ros.org/rospy_tutorials/Tutorials/WritingImagePublisherSubscriber
+'''
 
 TYPE = {
     'bool': Bool,
@@ -32,7 +38,7 @@ TYPE = {
     'brake_cmd': BrakeCmd,
     'throttle_cmd': ThrottleCmd,
     'path_draw': Lane,
-    'image': Image
+    'image_jpg': CompressedImage
 }
 
 
@@ -191,12 +197,12 @@ class Bridge(object):
         image = PIL_Image.open(BytesIO(base64.b64decode(imgString)))
         image_array = np.asarray(image)
 
-        image_message = self.bridge.cv2_to_imgmsg(image_array, encoding="rgb8")
-        header = Header()
-        header.stamp = rospy.Time.now()
-        header.frame_id = '/world'
-        image_message.header = header
-        self.publishers['image'].publish(image_message)
+        # Create and publish CompressedImage message
+        msg = CompressedImage()
+        msg.header.stamp = rospy.Time.now()
+        msg.format = "jpeg"
+        msg.data = np.array(cv2.imencode('.jpg', image_array)[1]).tostring()
+        self.publishers['image_jpg'].publish(msg)
 
     def callback_steering(self, data):
         self.server('steer', data={'steering_angle':

@@ -18,6 +18,6 @@ conf = AttrDict({
         {'topic': '/vehicle/lidar', 'type': 'pcl', 'name': 'lidar'},
         {'topic': '/vehicle/traffic_lights', 'type': 'trafficlights', 'name': 'trafficlights'},
         {'topic': '/vehicle/dbw_enabled', 'type': 'bool', 'name': 'dbw_status'},
-        {'topic': '/image_color', 'type': 'image', 'name': 'image'},
+        {'topic': '/image_jpg', 'type': 'image_jpg', 'name': 'image_jpg'},
     ]
 })
