@@ -281,8 +281,10 @@ class WaypointUpdater(object):
         else:
             stopping_distance = get_accel_distance(
                 self.waypoints[self.final_waypoints_start_ptr+offset].get_v(),
-                0.0, self.default_accel) + tl_buffer
-            self.state = 'moving'
+                0.0, self.default_accel/safety_factor)
+            # self.state = 'moving'
+        rospy.loginfo("dist_to_tl = {}, stopping_dist = {}, state = {}"
+                      .format(dist_to_tl, stopping_distance, self.state))
 
         # handle case where we are stopped at lights and light is red
         if self.state == 'stopped' and dist_to_tl < tl_buffer:
@@ -291,25 +293,30 @@ class WaypointUpdater(object):
                 mod_ptr = ptr % len(self.waypoints)
                 self.waypoints[mod_ptr].JMTD.set_VAJt(0.0, 0.0, 0.0, 0.0)
                 self.waypoints[mod_ptr].set_v(0.0)
+                self.waypoints[mod_ptr].JMT_ptr = -1
 
-        elif dist_to_tl < stopping_distance + tl_buffer:
+        elif dist_to_tl < stopping_distance + tl_buffer or\
+             dist_to_tl < 20:  
+            rospy.loginfo("dist_to_tl = {}".format(dist_to_tl))
             # slowdown or stop
             start_ptr = self.final_waypoints_start_ptr + offset
             #  end_ptr = self.next_tl_wp
             final_end_ptr = self.final_waypoints_start_ptr + self.lookahead_wps
             if dist_to_tl < tl_buffer:  # small buffer from stop line
-                rospy.loginfo
+                rospy.loginfo("Now within tl_buffer = {}".format(tl_buffer))
                 for ptr in range(start_ptr, final_end_ptr):
                     mod_ptr = ptr % len(self.waypoints)
                     self.waypoints[mod_ptr].set_v(0.0)
                     self.waypoints[mod_ptr].JMTD.set_VAJt(0.0, 0.0, 0.0, 0.0)
+                    self.waypoints[mod_ptr].JMT_ptr = -1
                 # end for
             else:
                 target_velocity = 0.0
                 curpt = self.waypoints[start_ptr-1]
-                if curpt.JMT_ptr == -1:
-                    jmt_ptr = self.setup_jmt(curpt, target_velocity)
+                if curpt.JMT_ptr == -1 or self.state != 'slowdown':
+                    jmt_ptr = self.setup_jmt(curpt, target_velocity, safety_factor)
                     curpt.JMT_ptr = jmt_ptr
+                    self.state = 'slowdown'
                 else:
                     jmt_ptr = curpt.JMT_ptr
                 JMT_instance = self.JMT_List[jmt_ptr]    
@@ -328,8 +335,9 @@ class WaypointUpdater(object):
                                     math.sqrt(math.fabs(decel) * disp * 2.0))
                         velocity = min(velocity, self.waypoints
                                     [mod_ptr].get_maxV())
-                        if velocity < 0.2:
+                        if velocity < 0.1:
                             velocity = 0.0
+                            decel = 0.0
                         rospy.loginfo("velocity set to {} using accel = {} "
                                     "and disp = {} at ptr = {}"
                                     .format(velocity, decel, disp, mod_ptr))
@@ -358,20 +366,21 @@ class WaypointUpdater(object):
                     # end if else
                 # end for
             # end if else
+        elif self.waypoints[self.final_waypoints_start_ptr].get_v() >= \
+                self.default_velocity:
+            start_ptr = self.final_waypoints_start_ptr + offset
+            final_end_ptr = self.final_waypoints_start_ptr +\
+                self.lookahead_wps
+            for ptr in range(start_ptr, final_end_ptr):
+                mod_ptr = ptr % len(self.waypoints)
+                rospy.loginfo("setting to default velocity {} at ptr = {}"
+                            .format(self.default_velocity, mod_ptr))
+                self.waypoints[mod_ptr].set_v(self.default_velocity)
+                self.waypoints[mod_ptr].JMTD.\
+                    set_VAJt(self.default_velocity, 0.0, 0.0, 0.0)
+                self.waypoints[mod_ptr].JMT_ptr = -1
+            # offset = self.lookahead_wps  # this will bar entry to loop
         else:
-            # TODO Handle startup and JMTSpeedup
-            if self.waypoints[self.final_waypoints_start_ptr].get_v() >= \
-                    self.default_velocity:
-                start_ptr = self.final_waypoints_start_ptr + offset
-                final_end_ptr = self.final_waypoints_start_ptr +\
-                    self.lookahead_wps
-                for ptr in range(start_ptr, final_end_ptr):
-                    mod_ptr = ptr % len(self.waypoints)
-                    self.waypoints[mod_ptr].set_v(self.default_velocity)
-                    self.waypoints[mod_ptr].JMTD.\
-                        set_VAJt(self.default_velocity, 0.0, 0.0, 0.0)
-                offset = self.lookahead_wps  # this will bar entry to loop
-
             if self.waypoints[self.final_waypoints_start_ptr].get_v() < 1.5:
                 start_ptr = self.final_waypoints_start_ptr
                 final_end_ptr = self.final_waypoints_start_ptr +\
@@ -396,8 +405,9 @@ class WaypointUpdater(object):
                     self.waypoints[start_ptr + offset].set_v(velocity)
                     self.waypoints[start_ptr + offset].JMTD.set_VAJt(
                         velocity, self.default_accel, 0.0, 0.0)
+                    self.waypoints[start_ptr + offset].JMT_ptr = -1
                     offset += 1
-                self.state = 'moving'
+
                 offset -= 1
             # end if stopped or just starting up
 
@@ -405,7 +415,8 @@ class WaypointUpdater(object):
             final_end_ptr = self.final_waypoints_start_ptr +\
                 self.lookahead_wps
             curpt = self.waypoints[start_ptr]
-            if curpt.JMT_ptr == -1:
+            if curpt.JMT_ptr == -1 or self.state != 'speedup':
+                self.state = 'speedup'
                 curpt.JMT_ptr = self.setup_jmt(curpt, self.default_velocity)
             jmt_ptr = curpt.JMT_ptr
             JMT_instance = self.JMT_List[jmt_ptr]
@@ -421,7 +432,7 @@ class WaypointUpdater(object):
                     # assume that targets achieved
                     wpt.JMTD.set_VAJt(self.default_velocity, 0.0, 0.0, 0.0)
                     wpt.set_v(self.default_velocity)
-                    curpt.JMT_ptr = -1
+                    wpt.JMT_ptr = -1
                 else:
                     jmt_point = JMT_instance.JMTD_at(
                         wpt.JMTD.S, t, JMT_instance.T*1.5)
@@ -443,22 +454,23 @@ class WaypointUpdater(object):
             rospy.logwarn("recalc is set to {} we should recalculate"
                           .format(recalc))
 
-        rospy.loginfo("ptr_id, S, V, A, J, time")
+        rospy.loginfo("ptr_id, JMT_ptr, S, V, A, J, time")
         for wpt in self.waypoints[self.final_waypoints_start_ptr:
                                   self.final_waypoints_start_ptr +
                                   self.lookahead_wps]:
-            rospy.loginfo("{}, {}".format(wpt.ptr_id, wpt.JMTD))
+            rospy.loginfo("{}, {}, {}".format(wpt.ptr_id, wpt.JMT_ptr, wpt.JMTD))
 
-    def setup_jmt(self, curpt, target_velocity):
+    def setup_jmt(self, curpt, target_velocity, smooth_factor=1):
+        # How can we adjust these to get a smoother curve
 
         a_dist = get_accel_distance(curpt.JMTD.V, target_velocity,
-                                    self.default_accel)
+                                    self.default_accel/smooth_factor)
         T = get_accel_time(a_dist, curpt.JMTD.V, target_velocity)
 
         if a_dist < 0.1 or T < 0.1:
             # dummy values to prevent matrix singularity
             # if no velocity change required
-            a = 0.1
+            a_dist = 0.1
             T = 0.1
 
         rospy.loginfo("Setup JMT to accelerate to {} in dist {} m in time {} s"
