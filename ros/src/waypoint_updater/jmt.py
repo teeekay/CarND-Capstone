@@ -160,5 +160,11 @@ class JMTD_waypoint(object):
     def get_s(self):
         return self.JMTD.S
 
+    def get_a(self):
+        return self.JMTD.A
+
+    def get_j(self):
+        return self.JMTD.J
+
     def get_maxV(self):
         return self.max_v
