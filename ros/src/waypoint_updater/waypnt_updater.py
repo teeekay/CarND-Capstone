@@ -52,7 +52,7 @@ class WaypointUpdater(object):
         self.velocity = None
         self.lights = None
         self.final_waypoints = []
-        self.final_waypoints_start_ptr = 0
+        self.final_waypoints_start_ptr = 250 # 0
         self.back_search = False
         self.last_search_distance = None
         self.last_search_time = None
@@ -146,6 +146,7 @@ class WaypointUpdater(object):
                               "limited to max_velocity {}"
                               .format(self.max_velocity))
                 self.default_velocity = self.max_velocity * 0.975
+                # config['dyn_default_velocity'] = self.default_velocity
             else:
                 self.default_velocity = config['dyn_default_velocity']
             # end if
@@ -172,7 +173,9 @@ class WaypointUpdater(object):
                           "stoplight from {} to {}"
                           .format(old_test_stoplight_wp,
                                   config['dyn_test_stoplight_wp']))
-            self.next_tl_wp = config['dyn_test_stoplight_wp']
+            self.next_tl_wp = min(config['dyn_test_stoplight_wp'],
+                                  len(self.waypoints)-1)
+            # config['dyn_test_stoplight_wp'] = self.next_tl_wp
         # end if
 
         # we can also send adjusted values back
@@ -586,11 +589,12 @@ class WaypointUpdater(object):
             (a.x-b.x)**2 + (a.y-b.y)**2)
         # TODO: move away from using final waypoint, just use waypoints
         # since we have saved original v info within the structure
-        if self.final_waypoints:
-            dist = distance_lambda(self.final_waypoints[0].get_position(),
+        if self.waypoints and self.last_search_distance:
+            dist = distance_lambda(
+                self.waypoints[self.final_waypoints_start_ptr-1].get_position(),
                                    self.pose.position)
-            for i in range(1, len(self.final_waypoints)):
-                tmpdist = distance_lambda(self.final_waypoints[i].
+            for i in range(self.final_waypoints_start_ptr, self.final_waypoints_start_ptr + self.lookahead_wps):
+                tmpdist = distance_lambda(self.waypoints[i].
                                           get_position(),
                                           self.pose.position)
                 if tmpdist < dist:
@@ -598,13 +602,12 @@ class WaypointUpdater(object):
                 else:
                     # distance is starting to get larger so look at
                     # last position
-                    if (i == 1):
+                    if (i <= self.final_waypoints_start_ptr + 1):
                         # we're closest to original waypoint, but what if
                         # we're going backwards - loop backwards to make sure
                         # a point further back  isn't closest
-                        for j in range(self.final_waypoints_start_ptr-1,
-                                       self.final_waypoints_start_ptr -
-                                       len(self.final_waypoints),
+                        for j in range(i - 1,
+                                       i - self.lookahead_wps,
                                        -1):
                             tmpdist = distance_lambda(
                                 self.waypoints[j % len(self.waypoints)].
@@ -618,15 +621,16 @@ class WaypointUpdater(object):
                                     self.last_search_distance = dist
                                     return ((j+1) % len(self.waypoints))
                                 else:
+                                    rospy.logwarn("j = {}, new dist {} - {} > 5 ".format(j, dist, self.last_search_distance))
                                     break
                             # end if else
                         # end for
                     # end if
-
                     if abs(dist-self.last_search_distance) < 5.0:
                         self.last_search_distance = dist
-                        return ((self.final_waypoints_start_ptr + i - 1) %
+                        return ((i - 1) %
                                 len(self.waypoints))
+                    rospy.logwarn("i = {}, new dist {} - {} > 5".format(i, dist, self.last_search_distance))
                     # end if
                 # end if else
             # end for - fall out no closest match that looks acceptable
