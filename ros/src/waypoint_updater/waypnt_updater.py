@@ -57,6 +57,8 @@ class WaypointUpdater(object):
         self.last_search_distance = None
         self.last_search_time = None
         self.next_tl_wp = None
+        self.dyn_tl_buffer = 5.0  # tunable distance to stop before tl wp
+        self.dyn_jmt_time_factor = 1.0  # tunable factor to make nicer s curve
         self.update_rate = 10
         self.max_velocity = 0.0
         self.max_accel = 5.0
@@ -121,6 +123,8 @@ class WaypointUpdater(object):
             old_default_accel = self.default_accel
             old_lookahead_wps = self.lookahead_wps
             old_test_stoplight_wp = self.next_tl_wp
+            old_tl_buffer = self.dyn_tl_buffer
+            old_jmt_time_factor = self.dyn_jmt_time_factor
         # end if
 
         rospy.loginfo("Received dynamic parameters {} with level: {}"
@@ -174,6 +178,20 @@ class WaypointUpdater(object):
                                   config['dyn_test_stoplight_wp']))
             self.next_tl_wp = config['dyn_test_stoplight_wp']
         # end if
+        if old_tl_buffer != config['dyn_tl_buffer']:
+            rospy.loginfo("dyn_vars_cb Adjusting tl_buffer"
+                          "from {} to {}"
+                          .format(old_tl_buffer,
+                                  config['dyn_tl_buffer']))
+            self.dyn_tl_buffer = config['dyn_tl_buffer']
+
+        if old_jmt_time_factor != config['dyn_jmt_time_factor']:
+            rospy.loginfo("dyn_vars_cb Adjusting jmt_time_factor"
+                          "from {} to {}"
+                          .format(old_tl_buffer,
+                                  config['dyn_jmt_time_factor']))
+
+            self.dyn_jmt_time_factor = config['dyn_jmt_time_factor']
 
         # we can also send adjusted values back
         return config
@@ -290,9 +308,9 @@ class WaypointUpdater(object):
         # rospy.loginfo("velocity set to {} using accel = {} "
         #             "and disp = {} at ptr = {}"
         #             .format(velocity, decel, disp, mod_ptr))
-        self.waypoints[mod_ptr-1].set_v(velocity)
-        self.waypoints[mod_ptr-1].JMT_ptr = -1
-        self.waypoints[mod_ptr-1].JMTD.set_VAJt(
+        self.waypoints[mod_ptr].set_v(velocity)
+        self.waypoints[mod_ptr].JMT_ptr = -1
+        self.waypoints[mod_ptr].JMTD.set_VAJt(
             velocity, decel, 0.0, 0.0)
 
     def gen_point_in_jmt_curve(self, pt, jmt_ptr, t):
@@ -322,7 +340,8 @@ class WaypointUpdater(object):
         target_velocity = 0.0
 
         if curpt.JMT_ptr == -1 or self.state != 'slowdown':
-            jmt_ptr = self.setup_jmt(curpt, target_velocity, safety_factor)
+            jmt_ptr = self.setup_jmt(curpt, target_velocity, safety_factor,
+                                     self.dyn_jmt_time_factor)
             curpt.JMT_ptr = jmt_ptr
             self.state = 'slowdown'
         else:
@@ -400,6 +419,7 @@ class WaypointUpdater(object):
         if curpt.JMT_ptr == -1 or self.state != 'speedup':
             self.state = 'speedup'
             curpt.JMT_ptr = self.setup_jmt(curpt, self.default_velocity)
+            # smooth_factor = 1.0, time_factor = 1.0)
             jmt_ptr = curpt.JMT_ptr
         else:
             jmt_ptr = curpt.JMT_ptr
@@ -428,7 +448,6 @@ class WaypointUpdater(object):
     def set_waypoints_velocity(self):
         offset = 0           # offset in front of car to account for latency
         safety_factor = 2.0  # increase slowing down distance
-        tl_buffer = 5.0      # distance from tl to stop
         recalc = False       # indication that JMT calcs exceed bounds
 
         dist_to_tl = self.get_dist_to_tl()
@@ -447,18 +466,18 @@ class WaypointUpdater(object):
                       .format(dist_to_tl, stopping_distance, self.state))
 
         # handle case where car is stopped at lights and light is red
-        if self.state == 'stopped' and dist_to_tl < tl_buffer:
+        if self.state == 'stopped' and dist_to_tl < self.dyn_tl_buffer:
             self.set_stopped(self.final_waypoints_start_ptr, self.
                              final_waypoints_start_ptr + self.lookahead_wps)
 
-        elif dist_to_tl < stopping_distance + tl_buffer or\
+        elif dist_to_tl < stopping_distance + self.dyn_tl_buffer or\
                 dist_to_tl < 20:    # added last check in to try to prevent
                                     # flipping between accel and decel
                                     # when approaching the light
 
-            if dist_to_tl < tl_buffer:
+            if dist_to_tl < self.dyn_tl_buffer:
                 # small buffer from stop line - stop the car if in this area
-                rospy.loginfo("Now within tl_buffer = {}".format(tl_buffer))
+                rospy.loginfo("Now within tl_buffer = {}".format(self.dyn_tl_buffer))
                 self.set_stopped(self.final_waypoints_start_ptr, self.
                                  lookahead_wps)
             else:
@@ -493,12 +512,17 @@ class WaypointUpdater(object):
                                   self.lookahead_wps]:
             rospy.loginfo("{}, {}, {}".format(wpt.ptr_id, wpt.JMT_ptr, wpt.JMTD))
 
-    def setup_jmt(self, curpt, target_velocity, smooth_factor=1):
+    def setup_jmt(self, curpt, target_velocity, smooth_factor=1.0, 
+                  time_factor=1.0):
         # How can we adjust these to get a smoother curve
 
+        # smooth_factor set > 1.0 reduces the peak accel rates produced
+        # by extending the distance to slow down
         a_dist = get_accel_distance(curpt.JMTD.V, target_velocity,
                                     self.default_accel/smooth_factor)
-        T = get_accel_time(a_dist, curpt.JMTD.V, target_velocity)
+        # time_factor values set > 1 stretch out the start or end of the curve
+        # where the car is going slowest
+        T = get_accel_time(a_dist, curpt.JMTD.V, target_velocity) * time_factor
 
         if a_dist < 0.1 or T < 0.1:
             # dummy values to prevent matrix singularity
