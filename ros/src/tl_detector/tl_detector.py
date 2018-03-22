@@ -62,7 +62,7 @@ class TLDetector(object):
         self.last_state = TrafficLight.UNKNOWN
         self.last_wp = -1
         self.state_count = 0
-        self.change = False
+	self.change = False
         rospy.loginfo('Red: %s', TrafficLight.RED)
         rospy.loginfo('Yellow: %s', TrafficLight.YELLOW)
         rospy.loginfo('Green: %s', TrafficLight.GREEN)
@@ -124,7 +124,7 @@ class TLDetector(object):
             self.last_wp = light_wp
             self.upcoming_red_light_pub.publish(Int32(light_wp))
             if self.change:
-                self.change = False
+		self.change = False
                 rospy.loginfo('Upcoming Light state: %s',state)
                 rospy.loginfo('Upcoming Stop line: %f',light_wp)
         else:
