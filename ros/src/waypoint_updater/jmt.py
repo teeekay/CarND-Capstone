@@ -84,7 +84,7 @@ class JMT(object):
                              self.get_a_at(t), self.get_j_at(t), t)
 
         rospy.logdebug("waypoint_updater:JMTD_at displacement {} found "
-                      "s,v,a,j,t = {}".format(displacement, details))
+                       "s,v,a,j,t = {}".format(displacement, details))
 
         return details
 
@@ -122,7 +122,7 @@ class JMTDetails(object):
         self.time = time
 
     def __repr__(self):
-        return "%5.3f, %2.4f, %2.4f, %2.4f, %2.3f" % (self.time, self.S,
+        return "%3.3f, %6.3f, %2.4f, %2.4f, %2.4f" % (self.time, self.S,
                                                       self.V, self.A,
                                                       self.J)
 
