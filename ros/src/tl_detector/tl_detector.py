@@ -26,31 +26,8 @@ class TLDetector(object):
         self.camera_image = None
         self.lights = []
 
-        #tl_detection node subscribes to:
-        #/base_waypoints provides the complete list of waypoints for the course.
-        #/current_pose can be used used to determine the vehicle's location.
-        #/image_color which provides an image stream from the car's camera. These images are used to determine the color of upcoming traffic lights.
-        #/vehicle/traffic_lights provides the (x, y, z) coordinates of all traffic lights.
-
-        sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
-        sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
-
-        '''
-        /vehicle/traffic_lights provides you with the location of the traffic light in 3D map space and
-        helps you acquire an accurate ground truth data source for the traffic light
-        classifier by sending the current color state of all traffic lights in the
-        simulator. When testing on the vehicle, the color state will not be available. You'll need to
-        rely on the position of the light and the camera image to predict it.
-        '''
-        sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
-
-
-        sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
-
         config_string = rospy.get_param("/traffic_light_config")
         self.config = yaml.load(config_string)
-
-        self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
 
         self.bridge = CvBridge()
         self.light_classifier = TLClassifier()
@@ -71,6 +48,27 @@ class TLDetector(object):
         # List of positions that correspond to the line to stop in front of for a given intersection
         self.stop_line_positions = self.config['stop_line_positions']
         self.stop_line_waypoints = []
+
+        self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
+
+        #tl_detection node subscribes to:
+        #/base_waypoints provides the complete list of waypoints for the course.
+        #/current_pose can be used used to determine the vehicle's location.
+        #/image_color which provides an image stream from the car's camera. These images are used to determine the color of upcoming traffic lights.
+        #/vehicle/traffic_lights provides the (x, y, z) coordinates of all traffic lights.
+
+        sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
+        sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
+
+        '''
+        /vehicle/traffic_lights provides you with the location of the traffic light in 3D map space and
+        helps you acquire an accurate ground truth data source for the traffic light
+        classifier by sending the current color state of all traffic lights in the
+        simulator. When testing on the vehicle, the color state will not be available. You'll need to
+        rely on the position of the light and the camera image to predict it.
+        '''
+        sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
+        sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
 
         rospy.spin()
 
@@ -175,7 +173,7 @@ class TLDetector(object):
 
 
 
-    def get_light_state(self, light):
+    def get_light_state(self, light):#Argument light may not be required
         """Determines the current color of the traffic light
 
         Args:
@@ -235,6 +233,7 @@ class TLDetector(object):
         if stop_line > 0:
             if TLC_ENABLED:
                ntl_state = self.get_light_state(light)
+               #Argument light may not be required
             return stop_line,gt_ntl_state, ntl_state 
             #return stop_line, ntl_state 
         else:
