@@ -70,34 +70,6 @@ class TLDetector(object):
         sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
         sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
 
-<<<<<<< HEAD
-=======
-        config_string = rospy.get_param("/traffic_light_config")
-        self.config = yaml.load(config_string)
-
-        self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
-
-        #[Meenu] - Commented the following temporarily 
-        #self.bridge = CvBridge()
-        #self.light_classifier = TLClassifier()
-        #self.listener = tf.TransformListener()
-
-        self.state = TrafficLight.UNKNOWN
-        self.last_state = TrafficLight.UNKNOWN
-        self.last_wp = -1
-        self.state_count = 0
-	self.change = False
-        rospy.loginfo('Red: %s', TrafficLight.RED)
-        rospy.loginfo('Yellow: %s', TrafficLight.YELLOW)
-        rospy.loginfo('Green: %s', TrafficLight.GREEN)
-        rospy.loginfo('Unknown: %s', TrafficLight.UNKNOWN)
-
-        # List of positions that correspond to the line to stop in front of for a given intersection
-        self.stop_line_positions = self.config['stop_line_positions']
-        self.stop_line_waypoints = []
-
-
->>>>>>> eef0d3cb2ae1e4f6e2aa9b4fb142e4b13f8f5133
         rospy.spin()
 
     def pose_cb(self, msg):
@@ -126,14 +98,6 @@ class TLDetector(object):
         """
         self.has_image = True
         self.camera_image = msg
-<<<<<<< HEAD
-=======
-
-        if GROUND_TRUTH_PASS:
-            light_wp, state = self.process_ground_truth_lights()
-        else:        
-            light_wp, state = self.process_traffic_lights()
->>>>>>> eef0d3cb2ae1e4f6e2aa9b4fb142e4b13f8f5133
 
         #light_wp, state = self.process_traffic_lights()     
 
@@ -154,18 +118,13 @@ class TLDetector(object):
         if self.state != state:
             self.state_count = 0
             self.state = state
-<<<<<<< HEAD
             self.L_update = True 
-=======
-            self.change = True 
->>>>>>> eef0d3cb2ae1e4f6e2aa9b4fb142e4b13f8f5133
             
         elif self.state_count >= STATE_COUNT_THRESHOLD:
             self.last_state = self.state
             light_wp = light_wp if state == TrafficLight.RED else -1
             self.last_wp = light_wp
             self.upcoming_red_light_pub.publish(Int32(light_wp))
-<<<<<<< HEAD
             if self.L_update:
                 self.L_update = False
                 if TLC_ENABLED:
@@ -174,11 +133,6 @@ class TLDetector(object):
                 else:
                     rospy.loginfo('Upcoming GT Light state: %s',state)     
                     rospy.loginfo('Upcoming Classifier Light state: %s',tl_state)			
-=======
-            if self.change:
-		self.change = False
-                rospy.loginfo('Upcoming Light state: %s',state)
->>>>>>> eef0d3cb2ae1e4f6e2aa9b4fb142e4b13f8f5133
                 rospy.loginfo('Upcoming Stop line: %f',light_wp)
         else:
             self.upcoming_red_light_pub.publish(Int32(self.last_wp))
@@ -277,17 +231,11 @@ class TLDetector(object):
                         stop_line = position
 
         if stop_line > 0:
-<<<<<<< HEAD
             if TLC_ENABLED:
                ntl_state = self.get_light_state(light)
                #Argument light may not be required
             return stop_line,gt_ntl_state, ntl_state 
             #return stop_line, ntl_state 
-=======
-            #rospy.loginfo('Light state: %s',ntl_state)
-            #rospy.loginfo('Stop line: %f',stop_line)			
-            return stop_line, ntl_state 
->>>>>>> eef0d3cb2ae1e4f6e2aa9b4fb142e4b13f8f5133
         else:
             rospy.loginfo('Light state: %s',TrafficLight.UNKNOWN)
             return -1, TrafficLight.UNKNOWN, TrafficLight.UNKNOWN
