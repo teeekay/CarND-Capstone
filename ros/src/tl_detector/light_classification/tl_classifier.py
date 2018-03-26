@@ -59,7 +59,7 @@ class TLClassifier(object):
         y_class = yhat.argmax(axis=-1)
         labels = self.labels
 
-#        rospy.loginfo('%s (%.2f%%) : GPU time (s) : %f', labels[y_class], yhat[y_class]*100, dt.to_sec())
+#        rospy.logdebug('%s (%.2f%%) : GPU time (s) : %f', labels[y_class], yhat[y_class]*100, dt.to_sec())
         self.current_light = TrafficLight.UNKNOWN
         if (yhat[y_class]>0.5):
             if y_class == 0:
