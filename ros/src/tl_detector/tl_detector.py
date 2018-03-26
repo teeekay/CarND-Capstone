@@ -14,6 +14,7 @@ import math
 import time
 
 STATE_COUNT_THRESHOLD = 3
+UPDATE_RATE = 10
 
 class TLDetector(object):
     def __init__(self):
@@ -44,8 +45,9 @@ class TLDetector(object):
         
         self.last_wp = -1
         self.state_count = 0
-
         self.L_update = False
+        self.has_image = False
+
         rospy.logdebug('Red: %s', TrafficLight.RED)
         rospy.logdebug('Yellow: %s', TrafficLight.YELLOW)
         rospy.logdebug('Green: %s', TrafficLight.GREEN)
@@ -71,7 +73,51 @@ class TLDetector(object):
         sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb, queue_size=1)
         sub6 = rospy.Subscriber('/image_color', Image, self.image_cb, queue_size=1)
 
-        rospy.spin()
+        self.rate = rospy.Rate(UPDATE_RATE)
+	self.loop()
+        #rospy.spin()
+
+    def loop(self):
+        while not rospy.is_shutdown():
+            if self.has_image:        
+                #light_wp, state = self.process_traffic_lights()     
+
+                """ Added the following to confirm classifier light state - to rule out any latency issue
+                """	
+                light_wp, gt_state, tl_state = self.process_traffic_lights()
+        
+                if self.light_classifier is not None:
+                    state = tl_state
+                else:		
+                    state = gt_state
+                '''
+                Publish upcoming red lights at camera frequency.
+                Each predicted state has to occur `STATE_COUNT_THRESHOLD` number
+                of times till we start using it. Otherwise the previous stable state is
+                used.
+                '''
+                if self.state != state:
+                    self.state_count = 0
+                    self.state = state
+                    self.L_update = True 
+                elif self.state_count >= STATE_COUNT_THRESHOLD:
+                    self.last_state = self.state
+                    light_wp = light_wp if state == TrafficLight.RED else -1
+                    self.last_wp = light_wp
+                    self.upcoming_red_light_pub.publish(Int32(light_wp))
+                    if self.L_update:
+                        self.L_update = False
+                        if self.light_classifier is not None:
+                             rospy.logdebug('Upcoming GT Light state: %s',gt_state)     
+                             rospy.logdebug('Upcoming Classifier Light state: %s',state)
+                        else:
+                             rospy.logdebug('Upcoming GT Light state: %s',state)     
+                             rospy.logdebug('Upcoming Classifier Light state: %s',tl_state)			
+                        rospy.logdebug('Upcoming Stop line: %f',light_wp)
+                else:
+                    self.upcoming_red_light_pub.publish(Int32(self.last_wp))
+                self.state_count += 1
+            self.rate.sleep()
 
     def pose_cb(self, msg):
         """Callback fuction for vehicle's location."""
@@ -99,46 +145,6 @@ class TLDetector(object):
         """
         self.has_image = True
         self.camera_image = msg
-
-        #light_wp, state = self.process_traffic_lights()     
-
-        """ Added the following to confirm classifier light state - to rule out any latency issue
-        """	
-        light_wp, gt_state, tl_state = self.process_traffic_lights()
-        
-        if self.light_classifier is not None:
-            state = tl_state
-        else:		
-            state = gt_state
-        '''
-        Publish upcoming red lights at camera frequency.
-        Each predicted state has to occur `STATE_COUNT_THRESHOLD` number
-        of times till we start using it. Otherwise the previous stable state is
-        used.
-        '''
-        if self.state != state:
-            self.state_count = 0
-            self.state = state
-            self.L_update = True 
-            
-        elif self.state_count >= STATE_COUNT_THRESHOLD:
-            self.last_state = self.state
-            light_wp = light_wp if state == TrafficLight.RED else -1
-            self.last_wp = light_wp
-            self.upcoming_red_light_pub.publish(Int32(light_wp))
-            if self.L_update:
-                self.L_update = False
-                if self.light_classifier is not None:
-                    rospy.logdebug('Upcoming GT Light state: %s',gt_state)     
-                    rospy.logdebug('Upcoming Classifier Light state: %s',state)
-                else:
-                    rospy.logdebug('Upcoming GT Light state: %s',state)     
-                    rospy.logdebug('Upcoming Classifier Light state: %s',tl_state)			
-                rospy.logdebug('Upcoming Stop line: %f',light_wp)
-        else:
-            self.upcoming_red_light_pub.publish(Int32(self.last_wp))
-        self.state_count += 1
-
 
     def get_closest_waypoint(self, x, y, waypoints):
         """Identifies the closest path waypoint to the given position
