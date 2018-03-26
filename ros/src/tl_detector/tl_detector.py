@@ -176,11 +176,8 @@ class TLDetector(object):
         #returns the index of the closest waypoint
         return wp_id
 
-    def get_light_state(self, light):#Argument light may not be required
+    def get_light_state(self):
         """Determines the current color of the traffic light
-
-        Args:
-            light (TrafficLight): light to classify
 
         Returns:
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
@@ -218,9 +215,12 @@ class TLDetector(object):
         if self.light_classifier is not None: 
             if not self.busy:
                 self.busy = True
-                ntl_state = self.get_light_state(light)
+                ntl_state = self.get_light_state()
                 self.previous_light_state = ntl_state
                 self.busy = False
+                #clearing the image placeholder until the next image callback to avoid latching on the same image
+                self.camera_image = None
+                self.has_image = False
             else:
                 ntl_state = self.previous_light_state
 
@@ -229,7 +229,7 @@ class TLDetector(object):
             car_position = self.get_closest_waypoint(self.pose.pose.position.x,self.pose.pose.position.y, self.waypoints)
 
         # State = 0 : Red
-        if ntl_state != 4:
+        if ((ntl_state != 4) or (self.light_classifier is None)):
             if car_position:
                 for tl in self.lights: 	
                     nearest_waypoint = self.get_closest_waypoint(tl.pose.pose.position.x,tl.pose.pose.position.y, self.waypoints)
@@ -253,7 +253,7 @@ class TLDetector(object):
         #if stop_line > 0:
         if stop_distance < 1000:
             #if TLC_ENABLED:
-            #   ntl_state = self.get_light_state(light)
+            #   ntl_state = self.get_light_state()
             #   #Argument light may not be required
             return stop_line,gt_ntl_state, ntl_state 
             #return stop_line, ntl_state 
