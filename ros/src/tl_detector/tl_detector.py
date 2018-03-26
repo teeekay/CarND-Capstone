@@ -14,7 +14,6 @@ import math
 import time
 
 STATE_COUNT_THRESHOLD = 3
-
 class TLDetector(object):
     def __init__(self):
         rospy.init_node('tl_detector')
@@ -31,14 +30,14 @@ class TLDetector(object):
 
         self.stop_line_positions = self.config['stop_line_positions']
         self.stop_line_waypoints = []
-        
-        
+
         self.bridge = CvBridge()
         self.light_classifier = TLClassifier()
         self.listener = tf.TransformListener()
 
         self.state = TrafficLight.UNKNOWN
         self.last_state = TrafficLight.UNKNOWN
+
         self.previous_light_state =  TrafficLight.UNKNOWN
         self.busy = False
         
@@ -57,6 +56,7 @@ class TLDetector(object):
         #/image_color which provides an image stream from the car's camera. These images are used to determine the color of upcoming traffic lights.
         #/vehicle/traffic_lights provides the (x, y, z) coordinates of all traffic lights.
 
+
         sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb, queue_size=1)
         sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb, queue_size=1)
 
@@ -67,6 +67,7 @@ class TLDetector(object):
         simulator. When testing on the vehicle, the color state will not be available. You'll need to
         rely on the position of the light and the camera image to predict it.
         '''
+
        
         sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb, queue_size=1)
         sub6 = rospy.Subscriber('/image_color', Image, self.image_cb, queue_size=1)
@@ -128,6 +129,7 @@ class TLDetector(object):
             self.upcoming_red_light_pub.publish(Int32(light_wp))
             if self.L_update:
                 self.L_update = False
+
                 if self.light_classifier is not None:
                     rospy.loginfo('Upcoming GT Light state: %s',gt_state)     
                     rospy.loginfo('Upcoming Classifier Light state: %s',state)
