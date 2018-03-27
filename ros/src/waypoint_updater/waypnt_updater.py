@@ -709,6 +709,7 @@ class WaypointUpdater(object):
         for wpt in self.waypoints[self.final_waypoints_start_ptr:
                                   self.final_waypoints_start_ptr +
                                   self.lookahead_wps]:
+
             rospy.logdebug("{}, {}, {}".format(wpt.ptr_id, wpt.JMT_ptr,
                                               wpt.JMTD))
 
