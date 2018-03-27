@@ -792,12 +792,14 @@ class WaypointUpdater(object):
         self.pubs['/final_waypoints'].publish(lane)
 
     def closest_waypoint(self):
-        # TODO - use local search first of final_waypoints sent out last
-        # iteration
+
+        # Use back_search status to figure out car is not going
+        # in right direction?
+        self.back_search = False
+
         def distance_lambda(a, b): return math.sqrt(
             (a.x-b.x)**2 + (a.y-b.y)**2)
-        # TODO: move away from using final waypoint, just use waypoints
-        # since we have saved original v info within the structure
+
         if self.waypoints and self.last_search_distance:
             dist = distance_lambda(
                 self.waypoints[self.final_waypoints_start_ptr-1].
@@ -816,14 +818,14 @@ class WaypointUpdater(object):
                         # we're closest to original waypoint, but what if
                         # we're going backwards - loop backwards to make sure
                         # a point further back  isn't closest
-                        for j in range(i - 1,
-                                       i - self.lookahead_wps,
+                        for j in range(i - 2,
+                                       i - self.lookahead_wps - 1,
                                        -1):
                             tmpdist = distance_lambda(
                                 self.waypoints[j % len(self.waypoints)].
                                 get_position(),
                                 self.pose.position)
-                            if tmpdist < dist:
+                            if tmpdist <= dist:
                                 dist = tmpdist
                                 self.back_search = True
                             else:
@@ -838,6 +840,9 @@ class WaypointUpdater(object):
                                     break
                             # end if else
                         # end for
+                        # backwards local search was unsuccessful
+                        # break so we don't fall back into forwards local
+                        break
                     # end if
                     if abs(dist-self.last_search_distance) < 5.0:
                         self.last_search_distance = dist
