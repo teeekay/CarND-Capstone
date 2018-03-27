@@ -73,7 +73,8 @@ class WaypointUpdater(object):
         self.back_search = False
         self.last_search_distance = None
         self.last_search_time = None
-        self.next_tl_wp = None
+        self.dyn_test_stoplight = False
+        self.next_tl_wp = -1  # None
         self.dyn_tl_buffer = 5.0  # tunable distance to stop before tl wp
         self.dyn_jmt_time_factor = 1.0  # tunable factor to make nicer s curve
         self.update_rate = 10
@@ -195,13 +196,19 @@ class WaypointUpdater(object):
             self.lookahead_wps = config['dyn_lookahead_wps']
         # end if
 
-        if old_test_stoplight_wp != config['dyn_test_stoplight_wp']:
+        if old_test_stoplight_wp != config['dyn_test_stoplight_wp']\
+                and\
+                config['dyn_test_stoplight_wp'] != -1:
+            self.dyn_test_stoplight = True
+            # only update if dyn_test_stoplight_wp not set to -1
             rospy.logwarn("waypoint_updater:dyn_vars_cb Adjusting next "
                           "stoplight from {} to {}"
                           .format(old_test_stoplight_wp,
                                   config['dyn_test_stoplight_wp']))
             self.next_tl_wp = min(config['dyn_test_stoplight_wp'],
                                   len(self.waypoints)-1)
+        else:
+            self.dyn_test_stoplight = False
             # config['dyn_test_stoplight_wp'] = self.next_tl_wp
         # end if
         if old_tl_buffer != config['dyn_tl_buffer']:
@@ -289,10 +296,13 @@ class WaypointUpdater(object):
     # Receive a msg from /traffic_waypoint about the next stop line
     def traffic_cb(self, traffic_msg):
         if traffic_msg.data != self.next_tl_wp:
-            self.next_tl_wp = traffic_msg.data
-            rospy.loginfo("new /traffic_waypoint message received at wp: %d."
+            if self.dyn_test_stoplight is False:
+                self.next_tl_wp = traffic_msg.data
+                rospy.logwarn("new /traffic_waypoint message received at wp: %d."
                           "while car is at wp %d", self.next_tl_wp,
                           self.final_waypoints_start_ptr)
+            else:
+                rospy.logwarn("Ignoring /traffic_waypoint message while testing.")
         else:
             # just for debug to see what we're getting
             rospy.loginfo("same /traffic_waypoint message received.")
