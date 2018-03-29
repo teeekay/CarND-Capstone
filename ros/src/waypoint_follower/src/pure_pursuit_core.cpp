@@ -328,8 +328,9 @@ void PurePursuit::getNextWaypoint()
     return;
   }
 
-  // look for the next waypoint.
-  for (int i = 0; i < path_size; i++)
+  // look for the next waypoint, starting from closest waypoint to prevent
+  // searching behind the car
+  for (int i = closest_waypoint_idx_; i < path_size; i++)
   {
     // if search waypoint is the last
     if (i == (path_size - 1))
