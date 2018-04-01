@@ -85,7 +85,7 @@ class WaypointUpdater(object):
         self.dyn_jmt_time_factor = 1.0  # tunable factor to make nicer s curve
         self.update_rate = 10
         self.max_velocity = 0.0  # set based on max velocity in waypoints
-        self.default_velocity = 10.7
+        self.default_velocity = 0.0 #10.7
         self.lookahead_wps = 20  # 200 is too many
         self.subs = {}
         self.pubs = {}
@@ -571,11 +571,14 @@ class WaypointUpdater(object):
 
             velocity = min(curpt.get_maxV(), self.default_velocity)
             curpt.set_v(velocity)
-            try:
-                del_t += (curpt.get_s() - self.waypoints[(ptr - 1) %
-                          len(self.waypoints)].get_s()) / velocity
-            except NameError:
-                del_t = 0.0
+            if velocity > 0.0:
+                try:
+                    del_t += (curpt.get_s() - self.waypoints[(ptr - 1) %
+                                len(self.waypoints)].get_s()) / velocity
+                except NameError:
+                    del_t = 0.0
+            else:
+                del_t = 0
             curpt.JMTD.set_VAJt(velocity, 0.0, 0.0, del_t)
             curpt.JMT_ptr = -1
 
