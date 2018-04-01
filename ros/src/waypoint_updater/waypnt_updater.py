@@ -436,7 +436,7 @@ class WaypointUpdater(object):
         # this is set up to stop the car in a desired distance
 
         curpt = self.waypoints[ptr_id]
-        target_velocity = 0.95 * self.min_moving_velocity # was 0.0, move to just below creep speed
+        target_velocity = 1.10 * self.min_moving_velocity # was 0.0, move to just above creep speed
 
         T = get_accel_time(a_dist, curpt.JMTD.V, target_velocity) *\
             self.dyn_jmt_time_factor
@@ -667,6 +667,7 @@ class WaypointUpdater(object):
         # set V = 1.0 for waypoints in range
         if self.state != 'creeping':
             rospy.loginfo("Set car creeping")
+            self.state = 'creeping'
         for ptr in range(start_ptr, start_ptr + num_wps):
             mod_ptr = ptr % len(self.waypoints)
             self.waypoints[mod_ptr].JMTD.set_VAJt(self.min_moving_velocity,
@@ -745,7 +746,7 @@ class WaypointUpdater(object):
                     rospy.logwarn("Within buffer, but not travelling at creeping speed")
                     recalc = self.produce_slowdown(self.final_waypoints_start_ptr,
                         self.lookahead_wps,
-                        dist_to_tl - self.dyn_tl_buffer)
+                        dist_to_tl - (self.dyn_tl_buffer - 1.0))
 
             elif dist_to_tl < self.dyn_creep_zone + self.dyn_tl_buffer:
                 if self.waypoints[self.final_waypoints_start_ptr].get_v() <=\
@@ -756,7 +757,7 @@ class WaypointUpdater(object):
                         rospy.logwarn("now start to slowdown")
                     recalc = self.produce_slowdown(self.final_waypoints_start_ptr,
                                                self.lookahead_wps,
-                                               dist_to_tl - self.dyn_tl_buffer)
+                                               dist_to_tl - (self.dyn_tl_buffer - 1.0))
             else:
                 # reduce car velocity to 0.0 stoping before lights
                 if self.state != 'slowdown' and self.state != 'stopped':
@@ -765,7 +766,7 @@ class WaypointUpdater(object):
                 if dist_to_tl - self.dyn_tl_buffer > self.min_stop_distance:
                     recalc = self.produce_slowdown(self.final_waypoints_start_ptr,
                                                self.lookahead_wps,
-                                               dist_to_tl - self.dyn_tl_buffer)
+                                               dist_to_tl - (self.dyn_tl_buffer - 1.0))
             # end if else
         elif self.waypoints[self.final_waypoints_start_ptr].get_v() >= \
                 self.default_velocity:
