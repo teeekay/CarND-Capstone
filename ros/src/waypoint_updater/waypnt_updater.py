@@ -736,14 +736,14 @@ class WaypointUpdater(object):
             if dist_to_tl < self.dyn_tl_buffer:
                 # small buffer from stop line - stop the car if in this area
                 # Todo evaluate if we need to keep going
-                rospy.logwarn("Now within tl_buffer = {:4.3f}"
+                rospy.logdebug("Now within tl_buffer = {:4.3f}"
                               .format(self.dyn_tl_buffer))
                 if self.waypoints[self.final_waypoints_start_ptr].get_v() <=\
                         self.handoff_velocity: 
                     self.set_stopped(self.final_waypoints_start_ptr, self.
                                  lookahead_wps)
                 else:
-                    rospy.logwarn("Within buffer, but not travelling at creeping speed")
+                    rospy.logdebug("Within buffer, but not travelling at creeping speed")
                     recalc = self.produce_slowdown(self.final_waypoints_start_ptr,
                         self.lookahead_wps,
                         dist_to_tl - (self.dyn_tl_buffer - 1.0))
