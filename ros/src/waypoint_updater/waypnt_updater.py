@@ -213,6 +213,7 @@ class WaypointUpdater(object):
                           "stoplight from {} to {}"
                           .format(old_test_stoplight_wp,
                                   config['dyn_test_stoplight_wp']))
+            rospy.logwarn("Ignore /traffic_waypoint message while testing.")
             self.next_tl_wp = min(config['dyn_test_stoplight_wp'],
                                   len(self.waypoints)-1)
         else:
@@ -319,7 +320,7 @@ class WaypointUpdater(object):
                           "while car is at wp %d", self.next_tl_wp,
                           self.final_waypoints_start_ptr)
             else:
-                rospy.logwarn("Ignoring /traffic_waypoint message while testing.")
+                rospy.logdebug("Ignoring /traffic_waypoint message while testing.")
         # else:
             # just for debug to see what we're getting
             rospy.logdebug("same /traffic_waypoint message tl_wp = {} received."
