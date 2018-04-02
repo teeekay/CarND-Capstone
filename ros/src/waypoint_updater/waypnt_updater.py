@@ -98,7 +98,7 @@ class WaypointUpdater(object):
         self.is_decelerating = True
         self.min_stop_distance = 0.0
         self.stopping_distance = 0.0
-        self.decel_at_min_moving_velocity = -0.5  # still decelerating
+        self.decel_at_min_moving_velocity = 0.0  # had biased to -0.5 but not needed
 
         rospy.init_node('waypoint_updater', log_level=rospy.INFO)  # DEBUG)
 
