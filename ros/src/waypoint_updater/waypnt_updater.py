@@ -272,6 +272,8 @@ class WaypointUpdater(object):
             s = 0.0
             max_velocity = 0.0
             wpt = None  # just to stop linter complaining
+            t_waypoints = []
+            t_waypoints_2d = []
 
             for lanemsg_wpt in lane_msg.waypoints:
 
@@ -284,13 +286,16 @@ class WaypointUpdater(object):
                                     position.y)**2)
 
                 wpt = JMTD_waypoint(lanemsg_wpt, cntr, s)
-                self.waypoints.append(wpt)
-                self.waypoints_2d.append([wpt.get_x(), wpt.get_y()])
+                t_waypoints.append(wpt)
+                t_waypoints_2d.append([wpt.get_x(), wpt.get_y()])
 
                 if max_velocity < wpt.get_maxV():
                     max_velocity = wpt.get_maxV()
                 # end if
                 cntr += 1
+
+            self.waypoints = t_waypoints
+            self.waypoints_2d = t_waypoints_2d
             self.waypoint_tree = KDTree(self.waypoints_2d)
 
             rospy.loginfo("waypoints_cb {} waypoints loaded, last waypoint "
