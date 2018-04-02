@@ -147,7 +147,7 @@ class WaypointUpdater(object):
             self.rate.sleep()
         while not rospy.is_shutdown():
 
-            if self.waypoints:
+            if self.waypoints and self.waypoints_2d and self.waypoint_tree:
                 self.send_waypoints()
             self.rate.sleep()
 
