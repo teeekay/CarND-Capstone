@@ -799,10 +799,13 @@ class WaypointUpdater(object):
         accel_ratio = 2.0  # increase slowing down distance
         recalc = False       # indication that JMT calcs exceed bounds
 
-        if self.got_to_end is False:
-            dist_to_tl = self.get_dist_to_tl()
-        else:
+        if self.final_waypoints_start_ptr == len(self.waypoints) - 1:
+            if self.got_to_end is False:
+                rospy.logwarn("reached end of track at ptr = {}".format(self.final_waypoints_start_ptr))
+                self.got_to_end = True
             dist_to_tl = 0.0
+        else:
+            dist_to_tl = self.get_dist_to_tl()
 
         # don't go beyond end of track
         if self.final_waypoints_start_ptr + self.lookahead_wps > len(self.waypoints)-1:
@@ -887,7 +890,7 @@ class WaypointUpdater(object):
                     rospy.logwarn("how did I get here? at ptr = {}".format(self.final_waypoints_start_ptr))
             # end if else
         elif self.waypoints[self.final_waypoints_start_ptr].get_v() >= \
-                self.default_velocity:
+                min(self.default_velocity, self.waypoints[self.final_waypoints_start_ptr].get_maxV()):
                 # handle case where car is at target speed and no
                 # traffic lights within stopping distance
             if self.state != 'maintainspeed':
@@ -989,13 +992,10 @@ class WaypointUpdater(object):
         # generates the list of LOOKAHEAD_WPS waypoints based on car location
         # for now assume waypoints form a loop - may not be the case
 
-        if self.final_waypoints_start_ptr == len(self.waypoints) - 1:
-            if self.got_to_end is False:
-                rospy.logwarn("reached end of track at ptr = {}".format(self.final_waypoints_start_ptr))
-                self.got_to_end = True
-        else:
+        if self.got_to_end is False:
             self.final_waypoints_start_ptr = self.closest_waypoint()
-            self.set_waypoints_velocity()
+        
+        self.set_waypoints_velocity()
 
         lane = Lane()
         waypoints = []
