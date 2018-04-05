@@ -6,11 +6,11 @@ Udacity Self-Driving Car Nanodegree, 2018
 
 ### Team Members
 
-* Name
-* Name
-* Name
-* Name
-* Name
+* Effendi Dufford
+* Taylor Raack
+* Meenu Natarajan
+* Anthony Knight
+* Shripad Kondra
 
 ### Project Overview
 
@@ -40,14 +40,14 @@ The Control area's **DBW Node (Twist Controller)** sets the **throttle, brake, a
 
 | Area        | Task                     | Primary Member | Secondary Member | Description                                                                                                                                                                                             |
 |:-----------:|:------------------------:|:--------------:|:----------------:|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
-| Perception  | Traffic Light Detection  | Name           | Name             | Train/implement neural network traffic light classifier, and determine the stopping locations for red lights                                                                                            |
+| Perception  | Traffic Light Detection  | Shripad        | Meenu            | Train/implement neural network traffic light classifier, and determine the stopping locations for red lights                                                                                            |
 | Planning    | Waypoint Loader          | -              | -                | Use Udacity provided base code                                                                                                                                                                          |
-| Planning    | Waypoint Updater         | Name           | Name             | Design and implement a smooth speed profile planner using [Jerk Minimizing Trajectory (JMT)](http://courses.shadmehrlab.org/Shortcourse/minimumjerk.pdf) following dynamic red light stopping locations | 
-| Control     | Waypoint Follower        | Name           | Name             | Implement improvements to Autoware's base Pure Pursuit library to set target linear velocity and target angular velocity to follow upcoming waypoints                                                   |
-| Control     | DBW (Twist Controller)   | Name           | Name             | Implement & tune PID feedback control with low pass filtering for throttle/brake commands and kinematic yaw control for steering command                                                                |
-| Integration | Simulation Testing       | Name           | Name             | Test & debug fully integrated control system with the simulation on a highway track and test lot course                                                                                                 |
-| Integration | Real-world Image Testing | Name           | Name             | Test & debug traffic light classifier with real-world camera images from recorded ROS bag data                                                                                                          |
-| Integration | Visualization Tools      | Name           | Name             | Set up data visualization & analysis tools using ROS RQT with Multiplot plugin and RViz 3D scene viewer                                                                                                 |
+| Planning    | Waypoint Updater         | Anthony        | Effendi          | Design and implement a smooth speed profile planner using [Jerk Minimizing Trajectory (JMT)](http://courses.shadmehrlab.org/Shortcourse/minimumjerk.pdf) following dynamic red light stopping locations | 
+| Control     | Waypoint Follower        | Effendi        | Taylor           | Implement improvements to Autoware's base Pure Pursuit library to set target linear velocity and target angular velocity to follow upcoming waypoints                                                   |
+| Control     | DBW (Twist Controller)   | Taylor         | Effendi          | Implement & tune PID feedback control with low pass filtering for throttle/brake commands and kinematic yaw control for steering command                                                                |
+| Integration | Simulation Testing       | Meenu          | Anthony          | Test & debug fully integrated control system with the simulation on a highway track and test lot course                                                                                                 |
+| Integration | Real-world Image Testing | Meenu          | Shripad          | Test & debug traffic light classifier with real-world camera images from recorded ROS bag data                                                                                                          |
+| Integration | Visualization Tools      | Effendi        | Taylor           | Set up data visualization & analysis tools using ROS RQT with Multiplot plugin and RViz 3D scene viewer                                                                                                 |
 
 ### Implementation Details
 
