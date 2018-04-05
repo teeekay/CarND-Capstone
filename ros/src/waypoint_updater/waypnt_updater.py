@@ -924,16 +924,17 @@ class WaypointUpdater(object):
         # self.prev_step_v = self.waypoints[self.final_waypoints_start_ptr].get_v()
         # self.prev_step_a = self.waypoints[self.final_waypoints_start_ptr].get_a()
 
-        # Log JMT profile values
-        jmt_log = "\nptr_id, JMT_ptr, time, S, V, A, J\n"
+        # Log JMT profile values - Vcalc is calculated value, wheras Veffective is value 
+        # in twist which might have been limited by local wpt.vMax or global self.max_velocity
+        jmt_log = "\nptr_id, JMT_ptr, time, S, Vcalc, A, J, Veffective\n"
         for wpt in self.waypoints[self.final_waypoints_start_ptr:
                                   self.final_waypoints_start_ptr +
                                   self.lookahead_wps]:
-            jmt_log += "{}, {}, {}\n".format(wpt.ptr_id, wpt.JMT_ptr, wpt.JMTD)
+            jmt_log += "{}, {}, {}, {:3.4f}\n".format(wpt.ptr_id, wpt.JMT_ptr, wpt.JMTD, wpt.get_v())
         rospy.loginfo(jmt_log)
 
     def setup_speedup_jmt(self, curpt, a_dist, target_velocity):
-        # this is set up to stop the car in a desired distance
+        # this is set up to speedup the car to a desired velocity
 
         if curpt.get_a() < 0.0:
             time_adjustment = 1.5  # 1.5
@@ -1015,14 +1016,12 @@ class WaypointUpdater(object):
         if curpt.get_a() < 0.0:  # might prefer to check previous state to see if was in slowdown
             rospy.logwarn("look for max accel since currently decelerating at {:3.2f}".format(curpt.get_a()))
             accel_rate = 0.6
-            max_jerk = self.max_jerk * 0.90
+            max_jerk = self.max_desired_jerk
         else:  # assume here that this is startup condition
             rospy.logwarn("just using std values for accel since not decelerating with a={:3.2f}".format(curpt.get_a()))
             a_dist = get_accel_distance(curpt.get_v(), self.default_velocity, self.default_accel,
                                         curpt.get_a())
             return(self.default_accel, a_dist)
-            # accel_rate = self.default_accel
-            # max_jerk = max(self.max_jerk - 2.0, 2.0)
          
         a_dist = get_accel_distance(curpt.get_v(), self.default_velocity, accel_rate,
                                     curpt.get_a())
@@ -1109,8 +1108,8 @@ class WaypointUpdater(object):
         return (final_accel, a_dist)
 
     def get_speedup_time(self, start, end):
-        # Use JMT to figure out proper time for deceleration where 
-        # curve does not wobbble below min_moving _velocity
+        # Use JMT to figure out proper time for acceleration where 
+        # curve does not wobbble above max _velocity
         # start[s, velocity, acc]
         # end[s, velocity, acc]
 
@@ -1154,7 +1153,7 @@ class WaypointUpdater(object):
                 if acc > 0.0:
                     optimized = True
                 if counter > 30:
-                    rospy.logwarn("counter is {} in get_stopping_time - bail!"
+                    rospy.logwarn("counter is {} in get_speedup_time - bail!"
                                 .format(counter))
                     optimized = True
 
