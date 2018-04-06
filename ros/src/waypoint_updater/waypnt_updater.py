@@ -101,7 +101,8 @@ class WaypointUpdater(object):
         self.decel_at_min_moving_velocity = 0.0  # had biased to -0.5 but not needed
         self.got_to_end = False  # have we reached the end of the track?
 
-        rospy.init_node('waypoint_updater', log_level=rospy.INFO)  # DEBUG)
+        #rospy.init_node('waypoint_updater', log_level=rospy.INFO)
+        rospy.init_node('waypoint_updater', log_level=rospy.DEBUG)
 
         self.initial_accel = rospy.get_param('~initial_accel')
         self.max_accel = rospy.get_param('~max_accel')  # 5.0
@@ -344,14 +345,13 @@ class WaypointUpdater(object):
             self.next_tl_wp = -1
         if self.next_tl_wp > -1:  # self.final_waypoints_start_ptr:
             # TODO does not account for looping - don't think it needs to
-            dist_to_tl = math.fabs(self.waypoints[self.next_tl_wp - 1].get_s() -
-                                   self.waypoints[self.final_waypoints_start_ptr]
-                                   .get_s())
+            dist_to_tl = self.waypoints[self.next_tl_wp - 1].get_s() -\
+                        self.waypoints[self.final_waypoints_start_ptr].get_s()
         else:
             dist_to_tl = 5000  # big number
         return dist_to_tl
 
-    def get_min_stopping_distance(self, ptr_id):
+    def get_min_stopping_distance(self, ptr_id, max_jerk):
         # Use JMT to figure out shortest stopping distance with
         # maximum jerk of < 5.0 at 0.1 s after change in
         # direction of acceleration
@@ -400,11 +400,11 @@ class WaypointUpdater(object):
         rospy.logdebug("found jerk of {:3.2f} with a_dist of {:3.2f}"
                        " and acc of {:3.2f} with a time of {:3.2f}"
                        .format(jerk, a_dist, acc ,T))
-        if jerk < 0.0 - self.max_jerk:
+        if jerk < max_jerk:
             too_short = True
-            dist_diff = 0.5
+            dist_diff = 1.0
         else:
-            dist_diff = -0.5
+            dist_diff = -1.0
                 
         optimized = False
         counter = 0
@@ -437,12 +437,12 @@ class WaypointUpdater(object):
 
             if too_short is True:
                 # looking for first instance that matches
-                if jerk > 0.0 - self.max_jerk:
+                if jerk > max_jerk:
                     final_dist = a_dist
                     optimized = True
             else:
                 # looking for first instance that fails
-                if jerk < 0.0 - self.max_jerk:
+                if jerk < 0.0 - max_jerk:
                     final_dist = a_dist - dist_diff
                     jerk = old_jerk
                     optimized = True
@@ -569,6 +569,8 @@ class WaypointUpdater(object):
             self.waypoints[mod_ptr].JMT_ptr = -1
         # cleanup jmt stack
         self.JMT_List[:] = []
+        # won't match self.next_tl_wp when reset
+        self.stop_target = 0
 
     def set_transition_to_stop(self, mod_ptr):
         # gracefully slow down to stopped at end of jmt decel curve
@@ -831,12 +833,14 @@ class WaypointUpdater(object):
 
                 self.stop_calc_v = self.waypoints[self.final_waypoints_start_ptr].get_v()
                 self.stop_calc_a = self.waypoints[self.final_waypoints_start_ptr].get_a()
-                self.stopping_distance = get_accel_distance(
-                        self.waypoints[self.final_waypoints_start_ptr].get_v(),
-                        0.0, -self.default_accel/accel_ratio,
-                        self.waypoints[self.final_waypoints_start_ptr].get_a())
+                # self.stopping_distance = get_accel_distance(
+                #        self.waypoints[self.final_waypoints_start_ptr].get_v(),
+                #        0.0, -self.default_accel/accel_ratio,
+                #        self.waypoints[self.final_waypoints_start_ptr].get_a())
+                self.stopping_distance = self.get_min_stopping_distance(
+                        self.final_waypoints_start_ptr, -self.max_desired_jerk)
                 self.min_stop_distance = self.get_min_stopping_distance(
-                        self.final_waypoints_start_ptr)
+                        self.final_waypoints_start_ptr, -self.max_jerk)
 
         rospy.loginfo("dist_to_tl at ptr = {} is {:4.3f}, stopping_dist = {:4.3f}, state = "
                       "{} min_stopping_distance = {}"
@@ -870,6 +874,12 @@ class WaypointUpdater(object):
                         self.lookahead_wps,
                         dist_to_tl - (self.dyn_tl_buffer - 1.0))
 
+            elif self.state == 'slowdown' and self.stop_target == self.next_tl_wp:
+                    recalc = self.produce_slowdown(self.final_waypoints_start_ptr,
+                                               self.lookahead_wps,
+                                               dist_to_tl - (self.dyn_tl_buffer - 1.0))
+                                            
+
             elif dist_to_tl < self.dyn_creep_zone + self.dyn_tl_buffer:
                 if self.waypoints[self.final_waypoints_start_ptr].get_v() <=\
                         self.handoff_velocity:
@@ -880,6 +890,7 @@ class WaypointUpdater(object):
                     recalc = self.produce_slowdown(self.final_waypoints_start_ptr,
                                                self.lookahead_wps,
                                                dist_to_tl - (self.dyn_tl_buffer - 1.0))
+                    self.stop_target = self.next_tl_wp
             else:
                 # not sure when this might trigger but not match next if statement - then 
                 # reduce car velocity to 0.0 stoping before lights
@@ -887,6 +898,10 @@ class WaypointUpdater(object):
                 #    rospy.logwarn("set car state to slowdown at ptr = {}".format(self.final_waypoints_start_ptr))
 
                 if dist_to_tl - self.dyn_tl_buffer > self.min_stop_distance:
+                    if self.state != 'slowdown':
+                        rospy.logwarn("Within stopping distance of TL - Start to slowdown!")
+                    else:
+                        rospy.logwarn("we should not get here!")
                     recalc = self.produce_slowdown(self.final_waypoints_start_ptr,
                                                self.lookahead_wps,
                                                dist_to_tl - (self.dyn_tl_buffer - 1.0))
@@ -1058,7 +1073,7 @@ class WaypointUpdater(object):
             if accel_rate < 0.0:
                 final_accel = accel_rate - acc_diff
                 duration = rospy.get_time() - timer_start
-                rospy.logdebug("greatest accel_rate of {3.2f} to accelerate with max_jerk"
+                rospy.logdebug("greatest accel_rate of {:3.2f} to accelerate with max_jerk"
                         "={:3.3f} from v={:3.3f}, a={:3.3f} to v={:3.3f} in "
                         "dist {:3.3f}m in time {:3.3f}s, took {:3.4f}s to calc"
                         .format(final_accel, jerk, curpt.get_v(), curpt.get_a(), self.default_velocity,
