@@ -99,7 +99,7 @@ class WaypointUpdater(object):
         self.is_decelerating = True
         self.min_stop_distance = 0.0
         self.stopping_distance = 0.0
-        self.decel_at_min_moving_velocity = -0.2  # had biased to -0.5 but not needed
+        self.decel_at_min_moving_velocity = -0.1  # had biased to -0.5 but not needed
         self.got_to_end = False  # have we reached the end of the track?
 
         #rospy.init_node('waypoint_updater', log_level=rospy.INFO)
@@ -482,7 +482,7 @@ class WaypointUpdater(object):
 
         if start[2] > 0.0:
             # currently speeding up
-            time_factor = 0.9
+            time_factor = 0.8
         else:
             time_factor = self.dyn_jmt_time_factor
 
@@ -534,7 +534,7 @@ class WaypointUpdater(object):
         # this is set up to stop the car in a desired distance
 
         curpt = self.waypoints[ptr_id]
-        target_velocity = 1.15 * self.min_moving_velocity # was 1.1, move to just above creep speed
+        target_velocity = 1.25 * self.min_moving_velocity # was 1.1, move to just above creep speed
         if curpt.get_a() > 0.0:
             time_adjustment = 0.8
         else:
