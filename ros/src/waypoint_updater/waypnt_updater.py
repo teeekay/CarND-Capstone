@@ -82,8 +82,8 @@ class WaypointUpdater(object):
         self.last_search_distance = None
         self.last_search_time = None
         self.dyn_test_stoplight = False
-        self.next_tl_wp = 293 #-1  # None
-        self.next_tl_wp_tmp = 293 # use to prevent race conditions during loop cycle
+        self.next_tl_wp = -1  # None
+        self.next_tl_wp_tmp = -1 # use to prevent race conditions during loop cycle
         self.dyn_tl_buffer = 2.5  # tunable distance to stop before tl wp
         self.dyn_creep_zone = 7.5  # should only creep forward in this buffer
         self.dyn_jmt_time_factor = 1.0  # tunable factor to make nicer s curve
@@ -354,6 +354,7 @@ class WaypointUpdater(object):
             dist_to_tl = 5000  # big number
         return dist_to_tl
 
+
     def get_min_stopping_distance(self, ptr_id, max_neg_jerk):
         # Use JMT to figure out shortest stopping distance with
         # maximum jerk of < 5.0 at 0.1 s after change in
@@ -415,6 +416,7 @@ class WaypointUpdater(object):
             dist_diff = 1.0
         else:
             dist_diff = -1.0
+
         if math.fabs(max_neg_jerk + self.max_desired_jerk) < 0.1:
             dist_diff = 2 * dist_diff
 
@@ -543,7 +545,6 @@ class WaypointUpdater(object):
                 rospy.logdebug("found initial jerk of {:3.2f}m/s^3 and start_acc={:3.3f}m/s^2 end_acc={:3.3f}m/s^2"
                        " using a_dist of {:3.2f}m and T={:3.2f}s"
                        .format(jerk, s_acc, e_acc, a_dist, T))
-
 
         duration = rospy.get_time() - timer_start
         rospy.loginfo("Shortest Distance to decelerate with max_neg_jerk={:3.3f}m/s^3 "
