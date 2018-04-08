@@ -16,7 +16,7 @@ from scipy.spatial import KDTree
 
 STATE_COUNT_THRESHOLD = 3
 UPDATE_RATE = 10
-CLASSIFY_BY_GROUND_TRUTH = False
+CLASSIFY_BY_GROUND_TRUTH = True #False
 
 class TLDetector(object):
     def __init__(self):
