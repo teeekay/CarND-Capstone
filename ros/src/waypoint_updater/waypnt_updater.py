@@ -63,6 +63,8 @@ def get_accel_time(S, Vi, Vf):
 
 class WaypointUpdater(object):
     def __init__(self):
+        self.testing = True
+        self.test_counter = 0
         self.dyn_vals_received = False
         self.waypoints = []
         self.pose = None
@@ -352,7 +354,7 @@ class WaypointUpdater(object):
             dist_to_tl = 5000  # big number
         return dist_to_tl
 
-    def get_min_stopping_distance(self, ptr_id, max_jerk):
+    def get_min_stopping_distance(self, ptr_id, max_neg_jerk):
         # Use JMT to figure out shortest stopping distance with
         # maximum jerk of < 5.0 at 0.1 s after change in
         # direction of acceleration
@@ -370,7 +372,8 @@ class WaypointUpdater(object):
         else:
             time_factor = self.dyn_jmt_time_factor
 
-        if math.fabs(max_jerk + self.max_desired_jerk) < 0.1:
+        if math.fabs(-self.max_desired_jerk - max_neg_jerk) < 0.1:
+            # if we are using_max_desired_jerk then start here
             decel_rate = 0.6
         else:
             # empirical settings to start closer to goal
@@ -405,12 +408,12 @@ class WaypointUpdater(object):
                        " when using decel_rate={:3.2f}m/s a_dist ={:3.2f}m and T={:3.2f}s"
                        .format(jerk, acc, decel_rate, a_dist, T))
 
-        if jerk < max_jerk:
+        if jerk < max_neg_jerk:
             too_short = True
             dist_diff = 1.0
         else:
             dist_diff = -1.0
-        if math.fabs(max_jerk + self.max_desired_jerk) < 0.1:
+        if math.fabs(max_neg_jerk + self.max_desired_jerk) < 0.1:
             dist_diff = 2 * dist_diff
 
         optimized = False
@@ -422,7 +425,7 @@ class WaypointUpdater(object):
             if a_dist < 0.0:
                 final_dist = a_dist - dist_diff
                 duration = rospy.get_time() - timer_start
-                rospy.logdebug("Shortest distance to decelerate with max_jerk"
+                rospy.logdebug("Shortest distance to decelerate with max_neg_jerk"
                         "={:3.3f} from v={:3.3f}, a={:3.3f} to v={:3.3f} in "
                         "dist {:3.3f}m in time {:3.3f}s, took {:3.4f}s to calc"
                         .format(jerk, start[1], start[2], end[1],
@@ -445,12 +448,13 @@ class WaypointUpdater(object):
 
             if too_short is True:
                 # looking for first instance that matches
-                if jerk > max_jerk:
+                if jerk > max_neg_jerk:
                     final_dist = a_dist
                     optimized = True
             else:
-                # looking for first instance that fails
-                if jerk < 0.0 - max_jerk:
+                # looking for first instance that fails 
+                # this is wrong, but fixing it breaks everything
+                if jerk < 0.0 - max_neg_jerk:
                     final_dist = a_dist - dist_diff
                     jerk = old_jerk
                     optimized = True
@@ -462,7 +466,7 @@ class WaypointUpdater(object):
                 optimized = True
         
         duration = rospy.get_time() - timer_start
-        rospy.loginfo("Shortest Distance of {:3.3f}m to decelerate with max_jerk={:3.3f}"
+        rospy.loginfo("Shortest Distance of {:3.3f}m to decelerate with max_neg_jerk={:3.3f}"
                       "from v={:3.3f}, a={:3.3f} to v={:3.3f}"
                       " in {:3.3f}s - Took {:3.4f}s to calc"
                       .format(final_dist, jerk, start[1], start[2], end[1],
@@ -523,7 +527,7 @@ class WaypointUpdater(object):
                        .format(jerk, acc, a_dist, T))
 
         duration = rospy.get_time() - timer_start
-        rospy.loginfo("Shortest Distance to decelerate with max_jerk={:3.3f}m/s^3 "
+        rospy.loginfo("Shortest Distance to decelerate with max_neg_jerk={:3.3f}m/s^3 "
                       "from v={:3.3f}m/s, a={:3.3f}m/s^2 to v={:3.3f}m/s a={:3.3f}m/s^2 in dist {:3.3f}m"
                       " in time {:3.3f}s - Took {:3.4f}s to calc."
                       .format(jerk, start[1], start[2], end[1], end[2],
@@ -873,6 +877,7 @@ class WaypointUpdater(object):
                 # added last check in to try to prevent
                                     # flipping between accel and decel
                                     # when approaching the light
+            #if state == 'speedup' or self.state == 'maintainspeed'
 
             if dist_to_tl < self.dyn_tl_buffer:
                 # small buffer from stop line - stop the car if in this area
@@ -886,10 +891,21 @@ class WaypointUpdater(object):
                                  lookahead_wps)
                 else:
                     rospy.logdebug("Within buffer, but not travelling at creeping speed")
-                    
-                    recalc = self.produce_slowdown(self.final_waypoints_start_ptr,
-                        self.lookahead_wps,
-                        dist_to_tl - (self.dyn_tl_buffer - 1.0))
+                    if self.state == 'slowdown':
+                        recalc = self.produce_slowdown(self.final_waypoints_start_ptr,
+                            self.lookahead_wps,
+                            dist_to_tl - (self.dyn_tl_buffer - 1.0))
+
+                    if (self.state == 'maintainspeed' or self.state == 'speedup') and dist_to_tl < self.min_stop_distance:
+                        rospy.logwarn("Distance to Red light {:3.2f}m shorter than limit {:3.2f}m to slow down in time at ptr = {}"
+                                  .format(dist_to_tl, self.min_stop_distance, self.final_waypoints_start_ptr))
+                        if self.state == 'maintainspeed':
+                            self.maintain_speed(self.final_waypoints_start_ptr, self.
+                                                lookahead_wps)                            
+                        else:
+                            recalc = self.generate_speedup(self.final_waypoints_start_ptr,
+                                self.final_waypoints_start_ptr +
+                                self.lookahead_wps)        
 
             elif self.state == 'slowdown' and self.stop_target == self.next_tl_wp:
                     recalc = self.produce_slowdown(self.final_waypoints_start_ptr,
@@ -901,12 +917,23 @@ class WaypointUpdater(object):
                         self.handoff_velocity:
                     self.set_creep(self.final_waypoints_start_ptr, self.lookahead_wps)
                 else:
-                    if self.state != 'slowdown' and self.state != 'stopped':
-                        rospy.logwarn("now start to slowdown")
-                    recalc = self.produce_slowdown(self.final_waypoints_start_ptr,
-                                               self.lookahead_wps,
-                                               dist_to_tl - (self.dyn_tl_buffer - 1.0))
-                    self.stop_target = self.next_tl_wp
+                    if (self.state == 'maintainspeed' or self.state == 'speedup') and dist_to_tl < self.min_stop_distance:
+                        rospy.logwarn("Distance to Red light {:3.2f}m shorter than limit {:3.2f}m to slow down in time at ptr = {}"
+                                  .format(dist_to_tl, self.min_stop_distance, self.final_waypoints_start_ptr))
+                        if self.state == 'maintainspeed':
+                            self.maintain_speed(self.final_waypoints_start_ptr, self.
+                                                lookahead_wps)                            
+                        else:
+                            recalc = self.generate_speedup(self.final_waypoints_start_ptr,
+                                self.final_waypoints_start_ptr +
+                                self.lookahead_wps)        
+                    else:
+                        if self.state != 'slowdown' and self.state != 'stopped':
+                            rospy.logwarn("now start to slowdown")
+                        recalc = self.produce_slowdown(self.final_waypoints_start_ptr,
+                                                self.lookahead_wps,
+                                                dist_to_tl - (self.dyn_tl_buffer - 1.0))
+                        self.stop_target = self.next_tl_wp
             else:
                 # not sure when this might trigger but not match next if statement - then 
                 # reduce car velocity to 0.0 stoping before lights
@@ -923,8 +950,17 @@ class WaypointUpdater(object):
                                                self.lookahead_wps,
                                                dist_to_tl - (self.dyn_tl_buffer - 1.0))
                 else:
-                    rospy.logwarn("how did I get here? at ptr = {}".format(self.final_waypoints_start_ptr))
-            # end if else
+                    rospy.logwarn("Distance to Red light {:3.2f}m shorter than limit {:3.2f}m to slow down in time at ptr = {}"
+                                  .format(dist_to_tl, self.min_stop_distance, self.final_waypoints_start_ptr))
+                    if self.state == 'maintainspeed':
+                        self.maintain_speed(self.final_waypoints_start_ptr, self.
+                                lookahead_wps)
+                    elif self.state == 'speedup':
+                        recalc = self.generate_speedup(self.final_waypoints_start_ptr,
+                                                       self.final_waypoints_start_ptr +
+                                                       self.lookahead_wps)        
+                    
+
         elif self.waypoints[self.final_waypoints_start_ptr].get_v() >= \
                 min(self.default_velocity, self.waypoints[self.final_waypoints_start_ptr].get_maxV()):
                 # handle case where car is at target speed and no
@@ -1256,6 +1292,9 @@ class WaypointUpdater(object):
         if self.got_to_end is False:
             self.final_waypoints_start_ptr = self.closest_waypoint()
         
+        if self.testing is True:
+            self.run_tests()
+         
         self.set_waypoints_velocity()
 
         lane = Lane()
@@ -1387,6 +1426,24 @@ class WaypointUpdater(object):
                                 self.pose.position)
             rospy.logdebug("KDTree: closest={}, dist={:3.2f}".format(closest, self.last_search_distance))
         return closest
+
+
+    def run_tests(self):
+        self.next_tl_wp = -1
+        ## test of creep
+        if self.final_waypoints_start_ptr < 294:
+            self.next_tl_wp = 293
+            if self.state != 'creeping' and self.final_waypoints_start_ptr >= 288:
+                self.test_counter += 1
+                if self.test_counter > 60:
+                    self.next_tl_wp = -1
+        #### Test of seeing light too late
+        if self.final_waypoints_start_ptr > 400 and self.final_waypoints_start_ptr < 411:
+            self.next_tl_wp = 410
+        if self.final_waypoints_start_ptr > 420 and self.final_waypoints_start_ptr < 480:
+            self.next_tl_wp = 500
+        if self.final_waypoints_start_ptr >= 510 and self.final_waypoints_start_ptr < 753:
+            self.next_tl_wp = 753
 
 
 if __name__ == '__main__':
