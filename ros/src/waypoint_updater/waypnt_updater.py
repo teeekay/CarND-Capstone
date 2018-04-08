@@ -849,7 +849,7 @@ class WaypointUpdater(object):
                                            dist_to_tl - (self.dyn_tl_buffer - self.dyn_buffer_offset))
 
         # switch to slowdown if possible!
-        elif (self.state == 'speedup' or self.state == 'maintainspeed') and\
+        elif (self.state == 'speedup' or self.state == 'maintainspeed' or self.state == 'slowdown') and\
                dist_to_tl - self.dyn_tl_buffer < self.stopping_distance :
             if dist_to_tl - self.dyn_tl_buffer > self.min_stop_distance:
                 if self.state != 'slowdown':
@@ -1153,13 +1153,17 @@ class WaypointUpdater(object):
     def send_waypoints(self):
         # generates the list of LOOKAHEAD_WPS waypoints based on car location
 
-        # do this at start of each cycle so that it doesn't change
-        # if traffic cb happens in middle of loop
-        self.next_tl_wp = self.next_tl_wp_tmp
-
         if self.got_to_end is False:
             self.final_waypoints_start_ptr = self.closest_waypoint()
 
+        # do this at start of each cycle so that it doesn't change
+        # if traffic cb happens in middle of loop
+        if self.next_tl_wp_tmp >= self.final_waypoints_start_ptr:
+            self.next_tl_wp = self.next_tl_wp_tmp
+        else:
+            self.next_tl_wp = -1
+
+        # this manipulates self.next_tl_wp if self.testing is True
         if self.testing is True:
             self.run_tests()
 
