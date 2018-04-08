@@ -84,8 +84,9 @@ class WaypointUpdater(object):
         self.dyn_test_stoplight = False
         self.next_tl_wp = 0 #-1  # None
         self.next_tl_wp_tmp = 0 # use to prevent race conditions during loop cycle
-        self.dyn_tl_buffer = 2.5  # tunable distance to stop before tl wp
+        self.dyn_tl_buffer = 3.5  # tunable distance to stop before tl wp
         self.dyn_creep_zone = 7.5  # should only creep forward in this buffer
+        self.dyn_buffer_offset = 2.0
         # self.dyn_jmt_time_factor = 1.0  # tunable factor to make nicer s curve
         self.update_rate = 10
         self.max_velocity = 0.0  # set based on max velocity in waypoints
@@ -166,6 +167,7 @@ class WaypointUpdater(object):
             old_test_stoplight_wp = self.next_tl_wp_tmp
             old_tl_buffer = self.dyn_tl_buffer
             old_creep_zone = self.dyn_creep_zone
+            old_buffer_offset = self.dyn_buffer_offset
             # old_jmt_time_factor = self.dyn_jmt_time_factor
 
         rospy.loginfo("Received dynamic parameters {} with level: {}"
@@ -227,6 +229,20 @@ class WaypointUpdater(object):
                           .format(old_tl_buffer,
                                   config['dyn_tl_buffer']))
             self.dyn_tl_buffer = config['dyn_tl_buffer']
+
+        if old_buffer_offset != config['dyn_buffer_offset']:
+            rospy.loginfo("dyn_vars_cb Adjusting buffer_offset"
+                          "from {:3.2f}m to {:3.2f}m"
+                          .format(old_buffer_offset,
+                                  config['dyn_buffer_offset']))
+            self.dyn_buffer_offset = config['dyn_buffer_offset']
+            if self.dyn_buffer_offset > self.dyn_tl_buffer:
+                rospy.logwarn("dyn_buffer_offset={:3.2f}m set larger"
+                              "than dyn_tl_buffer={:3.2}m".format(
+                                  self.dyn_buffer_offset,
+                                  self.dyn_tl_buffer
+                              ))
+
 
         if old_creep_zone != config['dyn_creep_zone']:
             rospy.loginfo("dyn_vars_cb Adjusting creep_zone "
@@ -830,7 +846,7 @@ class WaypointUpdater(object):
             else:
                 recalc = self.produce_slowdown(self.final_waypoints_start_ptr,
                                            self.lookahead_wps,
-                                           dist_to_tl - (self.dyn_tl_buffer - 1.0))
+                                           dist_to_tl - (self.dyn_tl_buffer - self.dyn_buffer_offset))
 
         # switch to slowdown if possible!
         elif (self.state == 'speedup' or self.state == 'maintainspeed') and\
@@ -841,7 +857,7 @@ class WaypointUpdater(object):
                 self.stop_target = self.next_tl_wp
                 recalc = self.produce_slowdown(self.final_waypoints_start_ptr,
                             self.lookahead_wps,
-                            dist_to_tl - (self.dyn_tl_buffer - 1.5))
+                            dist_to_tl - (self.dyn_tl_buffer - self.dyn_buffer_offset))
             else:
                 rospy.logwarn("Distance to Red light {:3.2f}m shorter than ability {:3.2f}m to slow down in time at ptr = {}"
                                   .format(dist_to_tl, self.min_stop_distance, self.final_waypoints_start_ptr))
