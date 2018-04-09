@@ -288,13 +288,13 @@ class TLDetector(object):
                 ntl_state = self.previous_light_state
 
 
-        if self.pose and self.waypoints:
+        if self.pose and self.waypoint_tree:
             car_position = self.get_closest_waypoint(self.pose.pose.position.x,
                                                      self.pose.pose.position.y)
 
         # State = 0 : Red
         if ((ntl_state != 4) or (self.light_classifier is None)):
-            if car_position:
+            if car_position and self.waypoint_tree:
                 for tl in self.lights:
                     nearest_waypoint = self.get_closest_waypoint(
                                                     tl.pose.pose.position.x,
