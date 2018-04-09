@@ -352,7 +352,10 @@ class WaypointUpdater(object):
                            .format(traffic_msg.data))
 
     def dbw_enabled_cb(self, dbw_enabled_message):
-        self.dbw_enabled = dbw_enabled_message.data
+        if self.dbw_enabled != dbw_enabled_message.data:
+            rospy.logwarn("Setting dbw to {} in waypoint_updater"
+                          .format(dbw_enabled_message.data))
+            self.dbw_enabled = dbw_enabled_message.data
 
     def get_dist_to_tl(self):
         # this can happen before we get a traffic_wp msg
