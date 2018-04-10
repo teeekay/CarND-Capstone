@@ -65,7 +65,7 @@ def get_accel_time(S, Vi, Vf):
 class WaypointUpdater(object):
     def __init__(self):
         self.testing = False
-        self.testing = True
+        #self.testing = True
         self.test_counter = 0
         self.dyn_vals_received = False
         self.waypoints = []
@@ -107,8 +107,8 @@ class WaypointUpdater(object):
         self.got_to_end = False  # have we reached the end of the track?
         self.dbw_enabled = False
 
-        #rospy.init_node('waypoint_updater', log_level=rospy.INFO)
-        rospy.init_node('waypoint_updater', log_level=rospy.DEBUG)
+        rospy.init_node('waypoint_updater', log_level=rospy.INFO)
+        #rospy.init_node('waypoint_updater', log_level=rospy.DEBUG)
 
         self.initial_accel = rospy.get_param('~initial_accel')  # 0.3
         self.max_accel = rospy.get_param('~max_accel')  # 5.0
@@ -491,22 +491,20 @@ class WaypointUpdater(object):
                               T, duration))
         return final_dist
 
-    def get_stopping_time(self, start, end, max_jerk):
+    def get_stopping_time(self, start, end):
         # Use JMT to figure out proper time for deceleration where
         # curve does not wobbble below min_moving _velocity
         # start[s, velocity, acc]
         # end[s, velocity, acc]
 
-        max_jerk = math.fabs(max_jerk)
-
-        if start[1] <= self.min_moving_velocity:
+        if math.fabs(end[1] - start[1]) <= 0.1 and start[2] * end[2] >= 0.0:
             return 0.5
 
         timer_start = rospy.get_time()
 
-        if start[2] > 0.0:
-            # currently speeding up
-            time_factor = 0.8
+        if start[2] > 0.0 and start[1] > end[1]:
+            # currently speeding up while aiming to slow down
+            time_factor = 0.85
         else:
             time_factor = 1.0 # self.dyn_jmt_time_factor
 
@@ -524,8 +522,10 @@ class WaypointUpdater(object):
         try_reverse = False
         jmt = JMT(start, end, T)
         s_jerk = jmt.get_j_at(0.1)
+        #m_jerk1 = jmt.get_j_at(0.33*T)
+        #m_jerk2 = jmt.get_j_at(0.66*T)
         e_jerk = jmt.get_j_at(T - 0.1)
-        lsm_jerk = e_jerk*e_jerk + s_jerk*s_jerk
+        lsm_jerk = e_jerk*e_jerk + s_jerk*s_jerk # + m_jerk1*m_jerk1 + m_jerk2*mjerk2
         old_lsm_jerk = lsm_jerk
 
         rospy.logdebug("for time={:3.3f} found lsm_jerk={:3.4f} initial jerk={:3.4f}m/s^3 end jerk={:3.4f}m/s^3"
@@ -533,7 +533,7 @@ class WaypointUpdater(object):
                        .format(T, lsm_jerk, s_jerk, e_jerk, a_dist, T))
 
         optimized = False
-        time_diff = T * 0.01
+        time_diff = T * 0.02 # try to cut number of cycles by half
         counter = 0
         best_T = T
         try_reverse = False
@@ -624,7 +624,7 @@ class WaypointUpdater(object):
 
         start = [curpt.JMTD.S, curpt.JMTD.V, curpt.JMTD.A]
         end = [curpt.JMTD.S + a_dist, target_velocity, self.decel_at_min_moving_velocity]
-        T = self.get_stopping_time(start, end, self.max_desired_jerk)
+        T = self.get_stopping_time(start, end)
 
         rospy.loginfo("Car set to decel from v={:3.3f}, a={:3.3f} to v={:3.3f}, a={:3.3f}"
             " in dist {:3.3f}m in time {:3.3f}s"
