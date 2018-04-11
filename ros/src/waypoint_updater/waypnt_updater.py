@@ -191,13 +191,16 @@ class WaypointUpdater(object):
                           .format(old_default_velocity,
                                   config['dyn_default_velocity']))
 
-            if config['dyn_default_velocity'] > self.max_velocity:
+            if config['dyn_default_velocity'] > 0.96 * self.max_velocity:
                 rospy.logwarn("waypoint_updater:dyn_vars_cb default_velocity "
-                              "limited to max_velocity {:3.2f}m/s"
-                              .format(self.max_velocity))
-                self.default_velocity = self.max_velocity * 0.975
+                              "limited to 0.96 * max_velocity = {:3.2f}m/s"
+                              .format(self.max_velocity*0.96))
+                self.default_velocity = self.max_velocity * 0.96
             else:
                 self.default_velocity = config['dyn_default_velocity']
+                rospy.logwarn("waypoint_updater:dyn_vars_cb default_velocity "
+                              "set to {:3.2f}m/s"
+                              .format(self.max_velocity))
 
         if old_default_accel != config['dyn_default_accel']:
             rospy.logwarn("waypoint_updater:dyn_vars_cb Adjusting default_"
@@ -1303,7 +1306,7 @@ class WaypointUpdater(object):
 
         if self.got_to_end is False:
             self.final_waypoints_start_ptr = self.closest_waypoint()
-
+        
         # do this at start of each cycle so that it doesn't change
         # if traffic cb happens in middle of loop
         if self.next_tl_wp_tmp >= self.final_waypoints_start_ptr:
