@@ -388,7 +388,10 @@ class WaypointUpdater(object):
 
         if math.fabs(-self.max_desired_jerk - max_neg_jerk) < 0.1:
             # if we are using_max_desired_jerk then start here
-            decel_rate = 0.6
+            if a > 1.1:
+                decel_rate = 0.25
+            else:
+                decel_rate = 0.4
         else:
             # empirical settings to start closer to goal
             if a < 1.0:
@@ -430,7 +433,10 @@ class WaypointUpdater(object):
         else:
             dist_diff = -1.0
         if math.fabs(max_neg_jerk + self.max_desired_jerk) < 0.1:
-            dist_diff = 2 * dist_diff
+            if too_short is True:
+                dist_diff = max(2 * dist_diff, a_dist *.025)
+            else:
+                dist_diff = min(2 * dist_diff, -a_dist *.025)
 
         optimized = False
         counter = 0
