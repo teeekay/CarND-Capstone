@@ -200,7 +200,7 @@ class WaypointUpdater(object):
                 self.default_velocity = config['dyn_default_velocity']
                 rospy.logwarn("waypoint_updater:dyn_vars_cb default_velocity "
                               "set to {:3.2f}m/s"
-                              .format(self.max_velocity))
+                              .format(self.default_velocity))
 
         if old_default_accel != config['dyn_default_accel']:
             rospy.logwarn("waypoint_updater:dyn_vars_cb Adjusting default_"
