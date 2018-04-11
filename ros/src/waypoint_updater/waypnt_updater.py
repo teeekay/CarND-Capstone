@@ -1084,7 +1084,7 @@ class WaypointUpdater(object):
             old_dist = a_dist
 
             accel_rate = accel_rate + acc_diff
-            if accel_rate < 0.0:
+            if accel_rate < 0.1: # prevent sending really small value to get_accel_distance
                 final_accel = accel_rate - acc_diff
                 duration = rospy.get_time() - timer_start
                 rospy.logdebug("greatest accel_rate of {:3.2f} to accelerate with max_jerk"
