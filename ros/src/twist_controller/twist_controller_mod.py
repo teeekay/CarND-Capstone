@@ -29,6 +29,7 @@ class Controller(object):
         self.lpf_tau_throttle = 0.3
         self.lpf_tau_brake = 0.3
         self.lpf_tau_steering = 0.2
+        self.manual_braking = False
 
         self.max_braking_torque = (
             vehicle_mass + fuel_capacity * GAS_DENSITY) * abs(max_deceleration) * wheel_radius
@@ -89,6 +90,7 @@ class Controller(object):
         if is_decelerating and (target_linear_velocity < self.manual_braking_upper_velocity_limit and current_linear_velocity < self.manual_braking_upper_velocity_limit):
             # vehicle is coming to a stop or is at a stop; apply fixed braking torque
             # continuously, even if the vehicle is stopped
+            self.manual_braking = True
             brake_command = self.prev_manual_braking_torque
 
             # Ramp up manual braking torque
@@ -100,8 +102,10 @@ class Controller(object):
 
             self.velocity_pid_controller.reset()
             control_mode = "Manual braking"
-        elif velocity_error < -1 * limit_constant * current_linear_velocity:
+        elif velocity_error < -1 * max(limit_constant * current_linear_velocity, 0.1):
             # use brake if we want to slow down somewhat significantly
+            self.manual_braking = False
+
             brake_command = self.braking_pid_controller.step(-velocity_error, timestep) if velocity_error < (-1 * limit_constant *
                                                                                                              self.braking_to_throttle_threshold_ratio * current_linear_velocity) or (velocity_error < 0 and current_linear_velocity < 2.5) else 0
             self.velocity_pid_controller.reset()
@@ -109,6 +113,12 @@ class Controller(object):
         elif not is_decelerating or (current_linear_velocity > 5 and velocity_error > -1 * limit_constant * current_linear_velocity) or (current_linear_velocity < 5 and velocity_error > limit_constant * current_linear_velocity):
             # use throttle if we want to speed up or if we want to slow down
             # just slightly
+
+            # reset brake lpf to release manually held brake quickly
+            if self.manual_braking:
+                self.brake_lpf.reset()
+                self.manual_braking = False
+
             throttle_command = self.velocity_pid_controller.step(
                 velocity_error, timestep)
             self.braking_pid_controller.reset()
