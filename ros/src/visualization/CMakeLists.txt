@@ -14,7 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   nav_msgs
   std_msgs
-  #dynamic_reconfigure
+  dynamic_reconfigure
   )
 
 ## System dependencies are found with CMake's conventions
