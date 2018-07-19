@@ -2,10 +2,8 @@ import time
 
 import rospy
 
-from dynamic_reconfigure.server import Server
 from lowpass import LowPassFilter
 from pid import PID
-from twist_controller.cfg import DynReconfConfig
 from yaw_controller import YawController
 
 GAS_DENSITY = 2.858
@@ -14,7 +12,7 @@ ONE_MPH = 0.44704
 
 class Controller(object):
 
-    def __init__(self, default_update_interval, wheel_base, steer_ratio, min_speed, max_lat_accel, max_steer_angle, max_deceleration, max_throttle, fuel_capacity, vehicle_mass, wheel_radius):
+    def __init__(self, default_update_interval, wheel_base, steer_ratio, min_speed, max_lat_accel, max_steer_angle, max_deceleration, max_throttle, fuel_capacity, vehicle_mass, wheel_radius, dyn_velo_proportional_control, dyn_velo_integral_control, dyn_braking_proportional_control, dyn_braking_integral_control):
         self.current_timestep = None
         self.previous_acceleration = 0.
         self.max_throttle = max_throttle
@@ -39,8 +37,8 @@ class Controller(object):
         self.yaw_controller = YawController(
             wheel_base, steer_ratio, min_speed, max_lat_accel, max_steer_angle)
 
-        self.dynamic_reconf_server = Server(
-            DynReconfConfig, self.handle_dynamic_variable_update)
+        self.setup_pid_controllers(dyn_velo_proportional_control, dyn_velo_integral_control,
+                                   dyn_braking_proportional_control, dyn_braking_integral_control)
 
         self.throttle_lpf = LowPassFilter(self.lpf_tau_throttle,
                                           default_update_interval)
@@ -50,13 +48,6 @@ class Controller(object):
 
         self.steering_lpf = LowPassFilter(
             self.lpf_tau_steering, default_update_interval)
-
-    def handle_dynamic_variable_update(self, config, level):
-        # reset PID controller to use new parameters
-        self.setup_pid_controllers(config['dyn_velo_proportional_control'], config[
-            'dyn_velo_integral_control'], config['dyn_braking_proportional_control'], config['dyn_braking_integral_control'])
-
-        return config
 
     def setup_pid_controllers(self, velo_p, velo_i, braking_p, braking_i):
         rospy.loginfo("Initializing PID controllers with velo_P: {}, velo_I: {}, braking_P: {}, braking_I: {}"
