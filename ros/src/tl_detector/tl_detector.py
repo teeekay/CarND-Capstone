@@ -12,10 +12,12 @@ import cv2
 import yaml
 import math
 import time
+import numpy as np
 from scipy.spatial import KDTree
 
 STATE_COUNT_THRESHOLD = 3 # Means we need 4 consecutives
-UPDATE_RATE = 10
+# Although Carla is feeding at 30 Hz, we can handle at < 20 Hz
+UPDATE_RATE = 20
 CLASSIFY_BY_GROUND_TRUTH = False
 tl_decoder = ['RED','YELLOW','GREEN','','UNKNOWN']
 
@@ -29,6 +31,8 @@ class TLDetector(object):
         self.waypoints = None
         self.camera_image = None
         self.lights = []
+        self.image_counter = 0
+        self.last_img_sum = 0
         # List of positions that correspond to the line to stop in front of for a given intersection
         config_string = rospy.get_param("/traffic_light_config")
         self.config = yaml.load(config_string)
@@ -42,11 +46,16 @@ class TLDetector(object):
 
         self.bridge = CvBridge()
 
+        # option to save classification images to images subfolder
+        self.save_images = rospy.get_param('~save_images', False)
+
         if CLASSIFY_BY_GROUND_TRUTH:
             self.light_classifier = None
             self.has_image = True
         else:
-            self.light_classifier = TLClassifier()
+            use_image_clips = rospy.get_param('~use_image_clips', False)
+            use_image_array = rospy.get_param('~use_image_array', False)
+            self.light_classifier = TLClassifier(use_image_clips, use_image_array)
             self.has_image = False
 
         self.listener = tf.TransformListener()
@@ -103,7 +112,9 @@ class TLDetector(object):
         self.loop()
 
     def loop(self):
+        loopcntr = 0
         while not rospy.is_shutdown():
+            loopcntr = loopcntr + 1
             if self.has_image and self.pose and self.waypoint_tree:
 
                 """ Added the following to confirm classifier light state 
@@ -122,8 +133,8 @@ class TLDetector(object):
                 used.
                 '''
 
-                rospy.loginfo('TL: state_count={}, self.state={}, state={}'
-                              .format(self.state_count, self.state, state))
+                rospy.loginfo('TL: state_count={}, self.state={}, state={}, loop counter = {}'
+                              .format(self.state_count, self.state, state, loopcntr))
 
                 if self.state != state:
                     if (self.state == TrafficLight.YELLOW 
@@ -171,6 +182,11 @@ class TLDetector(object):
                 else:
                     self.upcoming_red_light_pub.publish(Int32(self.last_wp))
                 self.state_count += 1
+            else:
+                if not self.has_image:
+                    rospy.loginfo("Skipping tl_detector loop because has_image is False")
+                else:
+                    rospy.loginfo("Skipping tl_detector loop because pose or waypoint_tree are False")
             self.rate.sleep()
 
     def pose_cb(self, msg):
@@ -211,8 +227,26 @@ class TLDetector(object):
             msg (Image): image from car-mounted camera
 
         """
-        self.has_image = True
-        self.camera_image = msg
+        image_sum = np.sum(msg)
+
+        if image_sum != self.last_img_sum:
+            self.has_image = True
+            self.camera_image = msg
+            # not definitive, because in a callback without lock but gives idea for tracking       
+            self.image_counter = self.image_counter + 1
+            self.last_img_sum = image_sum
+
+            ########
+            # save image stream to files
+            if self.save_images is True:
+                image_name = 'images/image_'+ str(self.image_counter) + '.png'
+                cv2_img = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
+                cv2.imwrite(image_name, cv2_img)
+            ########
+
+        else:
+            rospy.loginfo("Duplicate image received in consecutive image_cb")
+
 
     def current_velocity_cb(self, msg):
         self.current_velocity = msg.twist.linear.x
@@ -241,10 +275,15 @@ class TLDetector(object):
             return TrafficLight.UNKNOWN
 
         #cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
+        rospy.loginfo("Begin xfer to imgmsg")
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "rgb8")
 
+        #clearing the image placeholder until the next image callback to avoid latching on the same image
+        self.camera_image = None
+        self.has_image = False
+
         #Get classification
-        return self.light_classifier.get_classification(cv_image)
+        return self.light_classifier.get_classification(cv_image, self.image_counter)
 
     def process_traffic_lights(self):
         """Finds closest visible traffic light/ground truth data, if one exists, and determines its
@@ -305,10 +344,8 @@ class TLDetector(object):
                     ntl_state = self.previous_light_state
 
                 self.busy = False
-                #clearing the image placeholder until the next image callback to avoid latching on the same image
-                self.camera_image = None
-                self.has_image = False
             else:
+                rospy.loginfo("Skipping process traffic lights loop because busy")
                 ntl_state = self.previous_light_state
 
 
