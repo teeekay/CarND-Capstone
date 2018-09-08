@@ -32,6 +32,14 @@ class DBWNode(object):
         max_lat_accel = rospy.get_param('~max_lat_accel', 3.)
         max_steer_angle = rospy.get_param('~max_steer_angle', 8.)
         throttle_limit = rospy.get_param('~throttle_limit', 0.2)
+        dyn_velo_proportional_control = rospy.get_param(
+            '~dyn_velo_proportional_control', 0.2)
+        dyn_velo_integral_control = rospy.get_param(
+            '~dyn_velo_integral_control', 0.01)
+        dyn_braking_proportional_control = rospy.get_param(
+            '~dyn_braking_proportional_control', 200)
+        dyn_braking_integral_control = rospy.get_param(
+            '~dyn_braking_integral_control', 0)
 
         # TODO - define min_speed as a parameter in the parameter server?
         min_speed = 0.
@@ -58,7 +66,7 @@ class DBWNode(object):
 
         # Create `Controller` object
         self.controller = Controller(
-            default_update_rate, wheel_base, steer_ratio, min_speed, max_lat_accel, max_steer_angle, decel_limit, throttle_limit, fuel_capacity, vehicle_mass, wheel_radius)
+            default_update_rate, wheel_base, steer_ratio, min_speed, max_lat_accel, max_steer_angle, decel_limit, throttle_limit, fuel_capacity, vehicle_mass, wheel_radius, dyn_velo_proportional_control, dyn_velo_integral_control, dyn_braking_proportional_control, dyn_braking_integral_control)
 
         # Subscribe to messages about car being under drive by wire control
         rospy.Subscriber(
@@ -71,7 +79,7 @@ class DBWNode(object):
         # Subscribe to steering report from vehicle
         rospy.Subscriber(
             '/current_velocity', TwistStamped, self.handle_steering_report)
-        
+
         # Subscribe to is_decelerating message from waypoint updater
         rospy.Subscriber(
             '/is_decelerating', Bool, self.handle_is_decelerating)

@@ -26,19 +26,27 @@ def load_graph(frozen_graph_filename):
 
 
 class TLClassifier(object):
-    def __init__(self):
+    def __init__(self, use_image_clips, use_image_array):
         rospy.logwarn("TLClassifier __init__ begins")
         t_0 = rospy.Time.now()
         # Clear any prev Keras sessions to improve model load time
         rospy.logwarn("clear_session")
 
+        # Parameter from tl_detector launch files to select site vs sim model
+        self.use_image_clips = use_image_clips
+        self.use_image_array = use_image_array
 
         tf.reset_default_graph()
 
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
 
-        model_name = "ResNet50-UdacityRealandSimMix-Best-val_acc-1.0"
+
+        if self.use_image_clips is True:
+            model_name = "ResNet50-UdacityReal_5runs-1.0"
+        else:
+            model_name = "ResNet50-UdacityRealandSimMix-Best-val_acc-1.0"
+        
         cwd = os.getcwd()
         graph_path = cwd + '/' + "light_classification/models/graph/"
         graph_file = graph_path + model_name + '.pb'
@@ -68,14 +76,15 @@ class TLClassifier(object):
         rospy.logwarn("predict on blank completed")
 
         self.current_light = TrafficLight.UNKNOWN
-        self.labels = np.array(['green', 'none', 'red', 'yellow'])
+        self.labels = np.array(['GREEN', 'NONE', 'RED', 'YELLOW'])
         self.resize_width = 224
         self.resize_height = 224
+        self.last_clip_found = 0
         t_1 = rospy.Time.now()
         dt_1 = t_1 - t_0
         rospy.logwarn('TL Classifier init completed in %f s.',dt_1.to_sec())
 
-    def get_classification(self, image):
+    def get_classification(self, image, image_counter):
         """Determines the color of the traffic light in the image
 
         Args:
@@ -85,33 +94,227 @@ class TLClassifier(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-        t0 = rospy.Time.now()
-        image = cv2.resize(image, (self.resize_width, self.resize_height))
-        np_image_data = np.asarray(image)
-        np_final = np.expand_dims(np_image_data, axis=0)
-        np_final = resnet50.preprocess_input(np_final.astype('float64'))
-
-        t1 = rospy.Time.now()
-        dt1 = t1 - t0
-
-        yhat = self.sess.run(self.y, feed_dict={self.x: np_final})
-
-        dt2 = rospy.Time.now() - t1
-
-        yhat = yhat[0]
-        y_class = yhat.argmax(axis=-1)
         labels = self.labels
 
-        rospy.loginfo('%s (%.2f%%) : ImagePrep time (s) : %f GPU time (s) : %f', labels[y_class],
-                      yhat[y_class]*100, dt1.to_sec(), dt2.to_sec())
+        t0 = rospy.Time.now()
+
+        # Switch classification method between site test (classify by multiple
+        # image clips) vs simulator (classify by single full image)
+        if self.use_image_clips is True:
+            # Classify by multiple image clips
+            # Expecting 800x600x3 images
+            # first check that image is 800x600 - if not resize it.
+            if image.shape[:2] != (600,800):
+                rospy.loginfo("Resizing image from {} to {}".format(image.shape[:2][::-1], (800,600)))
+                image = cv2.resize(image,(800,600))
+            ###chop image up
+            detect = False
+            # left corner x co-ords to split 800 pixels into 5 sections of 224 pixels
+            startx = [0,152,288,424,576]
+            # store the maximum confidence for green, yellow and red in an array
+            max_gyr = [0.0,0.0,0.0]
+            #store the minimum confidence for finding nothing
+            min_none = 1.0
+            # pointers  between index in green yellow and red in gyr to yhat array
+            gyr_to_color = [0,3,2]  # g,y,r to g,n,r,y
+            # list to store details of results - not used yet
+            foundinclip = []
+            # use different search pattern based on which clip tl was identified previously 
+            search_paths = [[0,1,2,3,4],[1,0,2,3,4],[2,1,3,0,4],[3,2,4,1,0],[4,3,2,1,0]]
+
+            if self.use_image_array is True:
+                image_clip_list = []
+                clip = 0
+                # load all 5 clips into an array
+                best_guess = 0.0
+                labelname = "NONE"
+                for i in range(5):
+                    image_clip = image[188:412, startx[i]:startx[i]+224]
+                    image_clip_list.append(image[188:412, startx[i]:startx[i]+224])
+                
+                image_clip_array = np.array(image_clip_list)
+                # rospy.loginfo("image array shape is {}".format(image_clip_array.shape))
+                np_final = resnet50.preprocess_input(image_clip_array.astype('float64'))
+                    
+                yhats = self.sess.run(self.y, feed_dict={self.x: np_final})
+                i = 0
+                min_clip = 0
+                best_guess = 0.0
+                for yhat in yhats:        
+                    # green
+                    if yhat[0] > max_gyr[0]:
+                        max_gyr[0] = yhat[0]
+                    # red
+                    if yhat[2] > max_gyr[2]:
+                        max_gyr[2] = yhat[2]
+                    # yellow
+                    if yhat[3] > max_gyr[1]:
+                        max_gyr[1] = yhat[3]
+                    # none
+                    if yhat[1] < min_none:
+                        min_none = yhat[1]
+                        min_clip = i
+                
+                    y_class = yhat.argmax(axis=-1)
+                    if y_class != 1:
+                        detect = True
+                        if yhat[y_class] > best_guess:
+                            best_guess = yhat[y_class]
+                            clip = i
+                            labelname = labels[y_class]
+                            output = "Image {} Clip {}, {}:{:4.2f}%, {}:{:4.2f}%, {}:{:4.2f}%, {}:{:4.2f}% ".format(image_counter, i,
+                                   labels[0], yhat[0]*100.0, labels[3], yhat[3]*100.0, labels[2], yhat[2]*100.0, labels[1], yhat[1]*100.0)
+                            if yhat[y_class] > 0.6:
+                                self.last_clip_found = i
+                    i = i + 1
+                if detect is True:
+                    rospy.loginfo("{}".format(output))
+
+                if (detect is False and min_none < 0.9) or (detect is True and best_guess < 0.6):
+                    if detect is False:  # best_guess == 0.0:
+                        #best_guess = min_none
+                        clip = min_clip
+
+                    mdetect = False
+
+                    big_image = cv2.resize(image[188:412, startx[clip]:startx[clip]+224],(336,336))
+                    mstartx = [0,56,112,0,56,112,0,56,112]
+                    mstarty = [48,48,48,78,78,78,108,108,108]
+                    image_clip_list = []
+
+                    for mi in range(9):
+                        image_clip_list.append(big_image[mstarty[mi]:mstarty[mi]+224, mstartx[i]:mstartx[i]+224])
+
+                    image_clip_array = np.array(image_clip_list)
+                    # rospy.loginfo("image array shape is {}".format(image_clip_array.shape))
+                    np_final = resnet50.preprocess_input(image_clip_array.astype('float64'))
+                        
+                    yhats = self.sess.run(self.y, feed_dict={self.x: np_final})
+                    mi = 0
+                    mmin_clip = 0
+                    for yhat in yhats:        
+                        # green
+                        if yhat[0] > max_gyr[0]:
+                            max_gyr[0] = yhat[0]
+                        # red
+                        if yhat[2] > max_gyr[2]:
+                            max_gyr[2] = yhat[2]
+                        # yellow
+                        if yhat[3] > max_gyr[1]:
+                            max_gyr[1] = yhat[3]
+                        # none
+                        if yhat[1] < min_none:
+                            min_none = yhat[1]
+                            mmin_clip = i
+                    
+                        y_class = yhat.argmax(axis=-1)
+                        if y_class != 1:
+                            mdetect = True
+                            detect = True
+                            if yhat[y_class] > best_guess:
+                                best_guess = yhat[y_class]
+                                mclip = "{}_{}".format(clip,i)
+                                mlabelname = labels[y_class]
+                                output = "Image {}_{}, {}:{:4.2f}%, {}:{:4.2f}%, {}:{:4.2f}%, {}:{:4.2f}% ".format(image_counter, mclip,
+                                    labels[0], yhat[0]*100.0, labels[3], yhat[3]*100.0, labels[2], yhat[2]*100.0, labels[1], yhat[1]*100.0)
+                        i = i + 1
+
+                    if detect is False and mdetect is False:
+                        mclip = "{}_{}".format(clip, mmin_clip)
+                        output = "Image {}_{}, {}:{:4.2f}%, {}:{:4.2f}%, {}:{:4.2f}%, {}:{:4.2f}% ".format(image_counter, mclip,
+                                        labels[0], max_gyr[0]*100.0, labels[3], max_gyr[1]*100.0, labels[2], max_gyr[2]*100.0, labels[1], min_none*100.0)
+
+                elif detect is False: # and min_none >= 0.9:
+                    output = "Image {}_{}, {}:{:4.2f}%, {}:{:4.2f}%, {}:{:4.2f}%, {}:{:4.2f}% ".format(image_counter, min_clip,
+                                        labels[0], max_gyr[0]*100.0, labels[3], max_gyr[1]*100.0, labels[2], max_gyr[2]*100.0, labels[1], min_none*100.0)
+                
+                rospy.loginfo("{}".format(output))
+
+            else:          
+                for i in search_paths[self.last_clip_found]:
+                    # run classification on a clip from the middle section of the image
+                    image_clip = image[188:412, startx[i]:startx[i]+224]
+                    np_image_data = np.asarray(image_clip)
+                    np_final = np.expand_dims(np_image_data, axis=0)
+                    np_final = resnet50.preprocess_input(np_final.astype('float64'))
+
+                    yhat = self.sess.run(self.y, feed_dict={self.x: np_final})
+
+                    yhat = yhat[0]
+                    y_class = yhat.argmax(axis=-1)
+
+                    # green
+                    if yhat[0] > max_gyr[0]:
+                        max_gyr[0] = yhat[0]
+                    # red
+                    if yhat[2] > max_gyr[2]:
+                        max_gyr[2] = yhat[2]
+                    # yellow
+                    if yhat[3] > max_gyr[1]:
+                        max_gyr[1] = yhat[3]
+                    # none
+                    min_none = min(min_none, yhat[1])
+
+                    rospy.loginfo("Image {} Clip {}, {}:{:4.2f}%, {}:{:4.2f}%, {}:{:4.2f}%, {}:{:4.2f}% "
+                                .format(image_counter, i, labels[0], yhat[0]*100.0, labels[3], yhat[3]*100.0, labels[2], yhat[2]*100.0, labels[1], yhat[1]*100.0))
+                    
+                    if y_class != 1:
+                        detect = True
+                        foundinclip.append((i, y_class, yhat[y_class]*100.0))
+                        if yhat[y_class] > 0.6:
+                            # fairly confident found a light so stop looking
+                            self.last_clip_found = i
+                            break
+            
+            dt2 = rospy.Time.now() - t0
+
+            if detect is True:
+                gyr_index = np.argmax(max_gyr)
+                confidence = max_gyr[gyr_index]
+                color_index = gyr_to_color[gyr_index]
+
+            else:
+                confidence = min_none  # use lowest confidence for none
+                color_index = 1
+
+            rospy.loginfo('%s (%.2f%%) | GPU time (s) : %f', labels[color_index],
+                          confidence*100, dt2.to_sec())
+
+        else:
+            # Classify by single full image
+            image = cv2.resize(image, (self.resize_width, self.resize_height))
+            np_image_data = np.asarray(image)
+            np_final = np.expand_dims(np_image_data, axis=0)
+            np_final = resnet50.preprocess_input(np_final.astype('float64'))
+
+            t1 = rospy.Time.now()
+            dt1 = t1 - t0
+
+            yhat = self.sess.run(self.y, feed_dict={self.x: np_final})
+
+            dt2 = rospy.Time.now() - t1
+
+            yhat = yhat[0]
+            y_class = yhat.argmax(axis=-1)
+            labels = self.labels
+
+            confidence = yhat[y_class]
+            color_index = y_class
+
+            rospy.loginfo("Image {}, {}:{:4.2f}%, {}:{:4.2f}%, {}:{:4.2f}%, {}:{:4.2f}% "
+                          .format(image_counter, labels[0], yhat[0]*100.0, labels[3], 
+                          yhat[3]*100.0, labels[2], yhat[2]*100.0, labels[1], yhat[1]*100.0))
+
+            rospy.loginfo('%s (%.2f%%) : ImagePrep time (s) : %f GPU time (s) : %f', labels[y_class],
+                          yhat[y_class]*100, dt1.to_sec(), dt2.to_sec())
 
         self.current_light = TrafficLight.UNKNOWN
-        if (yhat[y_class] > 0.5):
-            if y_class == 0:
+        if (confidence > 0.6):
+            if color_index == 0:
                 self.current_light = TrafficLight.GREEN
-            elif y_class == 2:
+            elif color_index == 2:
                 self.current_light = TrafficLight.RED
-            elif y_class == 3:
+            elif color_index == 3:
                 self.current_light = TrafficLight.YELLOW
 
         return self.current_light

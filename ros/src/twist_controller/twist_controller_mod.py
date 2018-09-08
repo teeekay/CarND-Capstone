@@ -2,10 +2,8 @@ import time
 
 import rospy
 
-from dynamic_reconfigure.server import Server
 from lowpass import LowPassFilter
 from pid import PID
-from twist_controller.cfg import DynReconfConfig
 from yaw_controller import YawController
 
 GAS_DENSITY = 2.858
@@ -14,7 +12,7 @@ ONE_MPH = 0.44704
 
 class Controller(object):
 
-    def __init__(self, default_update_interval, wheel_base, steer_ratio, min_speed, max_lat_accel, max_steer_angle, max_deceleration, max_throttle, fuel_capacity, vehicle_mass, wheel_radius):
+    def __init__(self, default_update_interval, wheel_base, steer_ratio, min_speed, max_lat_accel, max_steer_angle, max_deceleration, max_throttle, fuel_capacity, vehicle_mass, wheel_radius, dyn_velo_proportional_control, dyn_velo_integral_control, dyn_braking_proportional_control, dyn_braking_integral_control):
         self.current_timestep = None
         self.previous_acceleration = 0.
         self.max_throttle = max_throttle
@@ -28,7 +26,8 @@ class Controller(object):
         self.manual_braking_torque_up_rate = 300
         self.lpf_tau_throttle = 0.3
         self.lpf_tau_brake = 0.3
-        self.lpf_tau_steering = 0.2
+        self.lpf_tau_steering = 0.4
+        self.manual_braking = False
 
         self.max_braking_torque = (
             vehicle_mass + fuel_capacity * GAS_DENSITY) * abs(max_deceleration) * wheel_radius
@@ -38,8 +37,8 @@ class Controller(object):
         self.yaw_controller = YawController(
             wheel_base, steer_ratio, min_speed, max_lat_accel, max_steer_angle)
 
-        self.dynamic_reconf_server = Server(
-            DynReconfConfig, self.handle_dynamic_variable_update)
+        self.setup_pid_controllers(dyn_velo_proportional_control, dyn_velo_integral_control,
+                                   dyn_braking_proportional_control, dyn_braking_integral_control)
 
         self.throttle_lpf = LowPassFilter(self.lpf_tau_throttle,
                                           default_update_interval)
@@ -49,13 +48,6 @@ class Controller(object):
 
         self.steering_lpf = LowPassFilter(
             self.lpf_tau_steering, default_update_interval)
-
-    def handle_dynamic_variable_update(self, config, level):
-        # reset PID controller to use new parameters
-        self.setup_pid_controllers(config['dyn_velo_proportional_control'], config[
-            'dyn_velo_integral_control'], config['dyn_braking_proportional_control'], config['dyn_braking_integral_control'])
-
-        return config
 
     def setup_pid_controllers(self, velo_p, velo_i, braking_p, braking_i):
         rospy.loginfo("Initializing PID controllers with velo_P: {}, velo_I: {}, braking_P: {}, braking_I: {}"
@@ -89,6 +81,7 @@ class Controller(object):
         if is_decelerating and (target_linear_velocity < self.manual_braking_upper_velocity_limit and current_linear_velocity < self.manual_braking_upper_velocity_limit):
             # vehicle is coming to a stop or is at a stop; apply fixed braking torque
             # continuously, even if the vehicle is stopped
+            self.manual_braking = True
             brake_command = self.prev_manual_braking_torque
 
             # Ramp up manual braking torque
@@ -100,8 +93,10 @@ class Controller(object):
 
             self.velocity_pid_controller.reset()
             control_mode = "Manual braking"
-        elif velocity_error < -1 * limit_constant * current_linear_velocity:
+        elif velocity_error < -1 * max(limit_constant * current_linear_velocity, 0.1):
             # use brake if we want to slow down somewhat significantly
+            self.manual_braking = False
+
             brake_command = self.braking_pid_controller.step(-velocity_error, timestep) if velocity_error < (-1 * limit_constant *
                                                                                                              self.braking_to_throttle_threshold_ratio * current_linear_velocity) or (velocity_error < 0 and current_linear_velocity < 2.5) else 0
             self.velocity_pid_controller.reset()
@@ -109,6 +104,12 @@ class Controller(object):
         elif not is_decelerating or (current_linear_velocity > 5 and velocity_error > -1 * limit_constant * current_linear_velocity) or (current_linear_velocity < 5 and velocity_error > limit_constant * current_linear_velocity):
             # use throttle if we want to speed up or if we want to slow down
             # just slightly
+
+            # reset brake lpf to release manually held brake quickly
+            if self.manual_braking:
+                self.brake_lpf.reset()
+                self.manual_braking = False
+
             throttle_command = self.velocity_pid_controller.step(
                 velocity_error, timestep)
             self.braking_pid_controller.reset()

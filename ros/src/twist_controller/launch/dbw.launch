@@ -12,5 +12,9 @@
         <param name="max_lat_accel" value="3." />
         <param name="max_steer_angle" value="8." />
         <param name="throttle_limit" value="0.2" />
+        <param name="dyn_velo_proportional_control" value="0.1" />
+        <param name="dyn_velo_integral_control" value="0.01" />
+        <param name="dyn_braking_proportional_control" value="800" />
+        <param name="dyn_braking_integral_control" value="0" />
     </node>
 </launch>
